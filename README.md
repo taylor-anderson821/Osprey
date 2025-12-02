@@ -2,7 +2,7 @@ Osprey generates thermaling analytics for RC sailplanes and gliders by analyzing
 
 
 ### About Osprey
-Osprey processes Spektrum telemetry files (TLM) and generates two Excel files (XLSX) as output.  The first Excel file provides analytics and charts on thermal flying performance for each flying session, and the second Excel file maintains a record of soaring stats for each flying day. To use Osprey, you'll need a Spectrum reciever that emits vario telemetry, such as those listed [here](https://www.spektrumrc.com/radios/aircraft/receivers/?cgid=radios-aircraft-receivers&prefn1=integratedVariometer&prefv1=Yes&srule=best-matches&sz=24).  Osprey is written in Python, and is provided with stand-alone executables for both Windows and MacOS. 
+Osprey processes Spektrum telemetry files (TLM) and generates two Excel files (XLSX) as output.  The first Excel file provides analytics and charts on thermal flying performance for each flying session, and the second Excel file maintains a record of soaring stats for each flying day. To use Osprey, you need a Spectrum reciever that emits vario telemetry, such as those listed [here](https://www.spektrumrc.com/radios/aircraft/receivers/?cgid=radios-aircraft-receivers&prefn1=integratedVariometer&prefv1=Yes&srule=best-matches&sz=24).  Osprey is written in Python, and is provided with stand-alone executables for both Windows and MacOS. 
 
 ### Why should I use Osprey?
 Osprey provides insights into how many thermals you are catching, how long you're in them for, and the altitudes where you are entering and exiting them. You can use these analytics to better understand your thermaling performance, your thermalling progression over time, and even measure yourself against your flying peers.
@@ -23,7 +23,7 @@ Osprey also maintains a second Excel file that summarizes thermal performance by
 
 ![Alt text](images/daily-session-log.png?raw=true)
 
-Osprey software has been developed using telemetry data from electric gliders. I will likely work for DLG gliders -- I just haven't had any test data.
+Osprey software has been developed using telemetry data from electric gliders. It will likely work for DLG gliders -- I just haven't had any test data. If you are comfortable running Python scripts, you can adjust the detection parameters at the top of the file.
 
 ### Getting started with Osprey
 
