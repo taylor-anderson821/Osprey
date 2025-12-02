@@ -11,7 +11,7 @@ MINIMUM_THERMAL_THRESHOLD = 25 #minimum altitude gain before recognizing a therm
 import struct
 import numpy
 import os
-import openpyxl  
+import openpyxl
 import datetime
 
 class VarioRecord:
