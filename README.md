@@ -1,8 +1,9 @@
-# Osprey
+Osprey generares soaring analytics for RC sailplanes and gliders by analyzing vario telemetry from Spektrum recievers. 
 
-### What is Osprey?
 
-Osprey generares soaring analytics for RC sailplanes and gliders by analyzing vario telemetry from Spektrum recievers. Osprey processes Spektrum TLM files and generates two Excel files as outputs.  The first Excel file provides analytics and charts on  thermal flying performance for each flying session, which typically recorded from throttle cut OFF to throttle cut ON. The second Excel file maintains a historical record of your thermal flying stats for each flying day. 
+### About Osprey
+
+Osprey processes Spektrum TLM files and generates two Excel files as outputs.  The first Excel file provides analytics and charts on thermal flying performance for each flying session, and the second Excel file maintains a historical record of your thermal flying stats for each flying day. Osprey is written in Python, and is provided with stand-alone executables for both Windows and MacOS.  To use Osprey, you'll need a Spectrum reciever that emits vario telemetry, such as those listed [here](https://www.spektrumrc.com/radios/aircraft/receivers/?cgid=radios-aircraft-receivers&prefn1=integratedVariometer&prefv1=Yes&srule=best-matches&sz=24)
 
 ### Why should I use Osprey?
 
