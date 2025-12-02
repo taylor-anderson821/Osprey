@@ -29,12 +29,14 @@ Osprey software has been developed using telemetry data from electric gliders. I
 
 1. **Capture vario data** Set up your Spektrum transmitter to store telemetry data to the memory card.  Setup for this is in the the Telemetry view in the transmitter.  Click on "File Settings" and configure the file name and the trigger for recording telemetry.  I recommend using the trottle cut switch to start and stop recording (e.g. throttle cut OFF initiates recording). 
 
-2. **Connect the memory card/card reader to your computer** After flying, copy the TLM file from the card to your computer using a card reader.  Then, delete the TLM file on the memory card.  If you do not delete it on the card, the next time you use Osprey it will process the new sesssions as well as older ones.
+2. **Copy the TLM file to your computer** After flying, copy the TLM file from the card to your computer using a card reader.  Then, delete the TLM file on the memory card.  If you do not delete it on the card, the next time you use Osprey it will process the new sesssions as well as older ones.
 
 3. **Install Osprey**  Click the green 'Code' button at the top of this page and select 'Download ZIP'.  Double click on the ZIP and open it.
 
-4. **Run Osprey**  If you're a Python user, run the Python script.  If you're a Mac or Windows person, double click on the executble.
+4. **Run Osprey**  You can use the executables for Mac or Windows, or run the Osprey Python script. The first time Osprey runs, you will be asked to select units of measure.  Then you will be asked to select the TLM file.  Osprey will then process the file and generate the XLSX files.
 
+5. **Review your analytics** If you have Excel on your computer, double click either file to see the analytics.  Otherwise, upload your files to Google Drive and use Google Sheets to view them (that's what I used).
 
+### Next steps
+As mentioned, the thermal/launch/through detection algorithm was built using telemetry for electric gliders.  If you have a DLG glider, post an issue by navigating to the top of this page and clicking the Issues tab.
 
-23
