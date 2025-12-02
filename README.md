@@ -27,11 +27,11 @@ Osprey software has been developed using telemetry data from electric gliders. I
 
 ### Getting started with Osprey
 
-1. **Capture vario data** Set up your Spektrum transmitter to store telemetry data to the memory card.  Setup for this is in the bottom right corner of the Telemetry view in the Tx.
+1. **Capture vario data** Set up your Spektrum transmitter to store telemetry data to the memory card.  Setup for this is in the the Telemetry view in the transmitter.  Click on "File Settings" and configure the file name and the trigger for recording telemetry.  I recommend using the trottle cut switch to start and stop recording (e.g. throttle cut OFF initiates recording). 
 
-2. **Connect the memory card/card reader to your computer** Self explainatory
+2. **Connect the memory card/card reader to your computer** After flying, copy the TLM file from the card to your computer using a card reader.  Then, delete the TLM file on the memory card.  If you do not delete it on the card, the next time you use Osprey it will process the new sesssions as well as older ones.
 
-3. **Install Osprey**  Click the green 'Code' button at the top of this page and select 'Download ZIP'.  Double click on the ZIP to open it.
+3. **Install Osprey**  Click the green 'Code' button at the top of this page and select 'Download ZIP'.  Double click on the ZIP and open it.
 
 4. **Run Osprey**  If you're a Python user, run the Python script.  If you're a Mac or Windows person, double click on the executble.
 
