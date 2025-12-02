@@ -7,6 +7,7 @@ THERMAL_MAX_CLIMB_RATE_LOOKBACK = 5 #number of seconds to look back to check for
 LAUNCH_MIN_CLIMB_RATE_FPS = 21 # minimum launch climb rate (ft/s) to consider for launch peak candidates
 LAUNCH_MIN_CLIMB_RATE_LOOKBACK = 5 #number of seconds to look back to check for high climb rate before launch peak (all samples in seconds)
 TROUGH_CANDIDATE_WINDOW = 10 # number of seconds to look back to check for low climb rate before trough bottom candidate
+SESSION_MINIMUM_DURATION = 30
 
 import struct
 import numpy
@@ -555,7 +556,7 @@ def process_payload_packet(f, wb, thermal_records, session_records, quitProgram)
                 ws.cell(row=rowIndex, column=8, value=round(session_records[i].thermal_launch_ratio, 1))
                 # ws["H{}".format(rowIndex)].number_format =  openpyxl.styles.numbers.FORMAT_PERCENTAGE
 
-            add_session_bar_chart_to_ws(ws)
+                add_session_bar_chart_to_ws(ws)
             print("Processed", process_payload_packet.session_number + 1, "sessions,", len(thermal_records), "thermals caught.")
              
             # Update Daily Summary file
