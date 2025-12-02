@@ -10,8 +10,11 @@ Osprey provides insights into how many thermals you are catching, how long you'r
 # What analytics does Osprey produce?
 Oprey analyzes Spektrum altitude and vario telemetry and identifying the points where the glider (1) peaked in a thermal, (2) peaked after a launch, and (3) reached the bottom of any troughs between (1) and (2). Once it completes this analys, it produces an XLS file that icludes a chart of each session, annotated with each thermal.
 ![Alt text](images/session-profile.png?raw=true)
-It also generates summaries of sessions and thermals caught.
+
+It also summarizes sessions in a session summary table
 ![Alt text](images/session-summary.png?raw=true)
+
+and also summarizes the thermals caught.
 ![Alt text](images/thermal-summary.png?raw=true)
 
 
