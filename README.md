@@ -10,16 +10,20 @@ Oprey processes the vario telemetry data (altitude and rate of climb) in Spektru
 **Session Altitude Chart with Thermal Annoations**
 <br>
 <br>
+<br>
 ![Alt text](images/session-summary.png?raw=true)
 **Session Summary Table**
+<br>
 <br>
 <br>
 ![Alt text](images/thermal-summary.png?raw=true)
 **Thermal Summary Table**
 <br>
 <br>
+<br>
 ![Alt text](images/daily-session-log.png?raw=true)
 **Log of Daily Flight and Thermal Data** 
+<br>
 <br>
 <br>
 ### Getting started with Osprey
