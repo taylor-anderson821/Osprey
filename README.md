@@ -2,7 +2,7 @@
 Osprey provides insights into how many thermals you are catching, how long you're in them, and the altitudes where you are entering and exiting them. You can use these analytics to better understand your thermaling performance and track your progression over time.
 
 ### How Osprey Works
-Oprey processes the altitude and rate of climb data in Spektrum TLM files to indentify the points where the glider peaks in a thermal, peaks after a launch, or reaches a trough in between the two. Once Osprey completes this analysis, it generates an Excel (XLSX) file with altitude charts for each flying session annotated with the start and end of each thermal.  Osprey also maintains a separate Excel file that logs the history of your daily soaring stats. To use Osprey, you need a Spectrum reciever that emits vario telemetry data such one listed [here](https://www.spektrumrc.com/radios/aircraft/receivers/?cgid=radios-aircraft-receivers&prefn1=integratedVariometer&prefv1=Yes&srule=best-matches&sz=24).  Osprey is written in Python, and is provided with executables for both Windows and MacOS. Below are samples of Osprey analytics.
+Oprey processes altitude and rate of climb data in Spektrum TLM files to indentify the points where the glider peaks in a thermal, peaks after a launch, or reaches a trough in between the two. Once Osprey completes this analysis, it generates an Excel (XLSX) file with altitude charts for each flying session annotated with the start and end of each thermal.  Osprey also maintains a separate Excel file that logs the history of your daily soaring stats. To use Osprey, you need a Spectrum reciever that emits vario telemetry data such one listed [here](https://www.spektrumrc.com/radios/aircraft/receivers/?cgid=radios-aircraft-receivers&prefn1=integratedVariometer&prefv1=Yes&srule=best-matches&sz=24).  Osprey is written in Python, and is provided with executables for both Windows and MacOS. Below are samples of Osprey analytics.
 
 ![Alt text](images/session-profile.png?raw=true)
 **Session Altitude Chart with Thermal Annoations**
@@ -24,7 +24,7 @@ Oprey processes the altitude and rate of climb data in Spektrum TLM files to ind
 <br>
 ### Getting started with Osprey
 
-1. **Capture vario data** Set up your Spektrum transmitter to write telemetry data to your memory card.  In your transmitter's Telemetry view, click on "File Settings" and configure the file name and the trigger to initiate telemetry recording.  On my trasmitter I use the throttle cut switch to trigger telemetry recording (e.g. throttle cut OFF initiates recording). 
+1. **Capture vario data** Set up your Spektrum transmitter to write telemetry data to your memory card.  In your transmitter's Telemetry view, click on "File Settings" and configure the file name and the trigger to initiate telemetry recording for a flying  session.  On my trasmitter I use the throttle cut switch to trigger telemetry recording (i.e. throttle cut OFF initiates recording). 
 
 2. **Copy the TLM file to your computer** After flying, copy the TLM file from the card to your computer using a card reader.  Then delete the TLM file on the memory card.  If you do not delete the file on the card, the next time you use Osprey it will process the new sesssions as well as older ones.
 
