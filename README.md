@@ -1,14 +1,12 @@
 Osprey generates thermaling analytics for RC sailplanes and gliders by analyzing vario telemetry emitted by Spektrum recievers. 
 
-
 ### About Osprey
-Osprey processes Spektrum telemetry files (TLM) and generates two Excel files (XLSX) as output.  The first Excel file provides analytics and charts on thermal flying performance for each flying session, and the second Excel file maintains a record of soaring stats for each flying day. To use Osprey, you need a Spectrum reciever that emits vario telemetry, such as those listed [here](https://www.spektrumrc.com/radios/aircraft/receivers/?cgid=radios-aircraft-receivers&prefn1=integratedVariometer&prefv1=Yes&srule=best-matches&sz=24).  Osprey is written in Python, and is provided with stand-alone executables for both Windows and MacOS. 
+Osprey provides insights into how many thermals you are catching, how long you're in them for, and the altitudes where you are entering and exiting them. You can use these analytics to better understand your thermaling performance, your thermalling progression over time, and even measure yourself against flying peers.
 
-### Why should I use Osprey?
-Osprey provides insights into how many thermals you are catching, how long you're in them for, and the altitudes where you are entering and exiting them. You can use these analytics to better understand your thermaling performance, your thermalling progression over time, and even measure yourself against your flying peers.
+### How Osprey Works
+Oprey processes vario telemetry data (altitude and rate of climb) in Spektrum TLM files and indentifies the points where the glider (1) peaked in a thermal, (2) peaked after a launch, or (3) reached a troughs in between the two. Once Osprey completes this analys, it produces an Excel (XLSX) file that includes a altitude chart for each session annotated with the thermals it identifies.  Osprey also maintains a separate Excel file that holds a history of your daily soaring stats. To use Osprey, you need a Spectrum reciever that emits vario telemetry, such one  listed [here](https://www.spektrumrc.com/radios/aircraft/receivers/?cgid=radios-aircraft-receivers&prefn1=integratedVariometer&prefv1=Yes&srule=best-matches&sz=24).  Osprey is written in Python, and is provided with executables for both Windows and MacOS. 
 
-### What analytics does Osprey produce?
-Oprey analyzes Spektrum vario telemetry (altitude and rate of climb) and indentifies points where the glider (1) peaked in a thermal, (2) peaked after a launch, and (3) reached the bottom of any troughs between (1) and (2). Once Osprey completes this analys, it produces an XLS file that includes a chart for each session that is annotated with each thermal.
+
 ![Alt text](images/session-profile.png?raw=true)
 
 It summarizes this data in a session summary table...
