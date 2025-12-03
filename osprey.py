@@ -1,7 +1,7 @@
 ALTITUDE_MOVING_AVG_WINDOW = 5  # Number of previous samples to include in altitude moving average
 THERMAL_CANDIDATE_WINDOW = 30 # the number of points to look forward or back for thermal peak candidate 
-THERMAL_PEAK_MIN_ALTITUDE = 100 # minimum altitude of a thermal peak to be considered
-THERMAL_MINIMUM_THRESHOLD = 25 #minimum altitude gain before recognizing a thermal
+THERMAL_MIN_PEAK_ALTITUDE_FT = 100 # minimum altitude of a thermal peak to be considered
+THERMAL_MINIMUM_GAIN_FT = 25 #minimum altitude gain before recognizing a thermal
 THERMAL_MAX_CLIMB_RATE_FPS = 9 # maximum thermal climb rate (ft/s) to consider for thermal peak candidates (filters out launches)
 THERMAL_MAX_CLIMB_RATE_LOOKBACK = 5 #number of seconds to look back to check for high climb rate before thermal peak (all samples in seconds)
 LAUNCH_MIN_CLIMB_RATE_FPS = 21 # minimum launch climb rate (ft/s) to consider for launch peak candidates
@@ -16,17 +16,17 @@ import openpyxl
 import datetime
 
 class VarioRecord:
-        def __init__(self,timestamp, altitude, climb_rate):
-            self.timestamp = timestamp
-            self.altitude = altitude
-            self.climb_rate = climb_rate
-            self.altitude_smoothed = 0.0
-            self.thermal_peak_candidate = False
-            self.thermal_peak = False
-            self.launch_peak_candidate = False
-            self.launch_peak = False
-            self.trough_bottom_candidate = False
-            self.trough_bottom = False
+    def __init__(self,timestamp, altitude, climb_rate):
+        self.timestamp = timestamp
+        self.altitude = altitude
+        self.climb_rate = climb_rate
+        self.altitude_smoothed = 0.0
+        self.thermal_peak_candidate = False
+        self.thermal_peak = False
+        self.launch_peak_candidate = False
+        self.launch_peak = False
+        self.trough_bottom_candidate = False
+        self.trough_bottom = False
     
 class ThermalRecord:
     def __init__(self, session_number, thermal_number, start_time, start_index, end_time, end_index, start_altitude, end_altitude, duration, altitude_gain,
@@ -208,7 +208,7 @@ def identify_thermal_peaks(vario_records, session_records, session_number):
     for i in range(THERMAL_CANDIDATE_WINDOW, len(vario_records)-THERMAL_CANDIDATE_WINDOW):
         if(vario_records[i].altitude_smoothed > vario_records[i - THERMAL_CANDIDATE_WINDOW].altitude_smoothed and 
            vario_records[i].altitude_smoothed > vario_records[i + THERMAL_CANDIDATE_WINDOW].altitude_smoothed and
-           vario_records[i].altitude_smoothed > THERMAL_PEAK_MIN_ALTITUDE):
+           vario_records[i].altitude_smoothed > THERMAL_MIN_PEAK_ALTITUDE_FT):
                vario_records[i].thermal_peak_candidate = True
 
     # candidates will be in clusters -- only keep the highest point in each cluster   
@@ -329,7 +329,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                     duration = round(end_time - start_time, 1)
                     altitude_gain = round(end_altitude - start_altitude, 1)
                     avg_climb_rate = round(altitude_gain/duration, 1)
-                    if(altitude_gain >= THERMAL_MINIMUM_THRESHOLD):
+                    if(altitude_gain >= THERMAL_MINIMUM_GAIN_FT):
                         thermal_records.append(ThermalRecord(session_number, thermal_index, start_time, j, end_time, i, start_altitude, end_altitude, duration, altitude_gain, avg_climb_rate))
                         ws.cell(row=j, column=4, value=start_altitude) #mark thermal beginning in session sheet in XLS
                         ws.cell(row=i, column=5, value=end_altitude) #mark thermal end in session sheet in XLS
@@ -350,7 +350,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                         duration = round(end_time - start_time, 1)
                         altitude_gain = round(end_altitude - start_altitude, 1)
                         avg_climb_rate = round(altitude_gain/duration, 1)
-                        if(altitude_gain >= THERMAL_MINIMUM_THRESHOLD):
+                        if(altitude_gain >= THERMAL_MINIMUM_GAIN_FT):
                             thermal_records.append(ThermalRecord(session_number, thermal_index, start_time, last_trough_bottom_index, 
                                                              end_time, i, start_altitude, end_altitude, duration, altitude_gain, avg_climb_rate ))                       
                             ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude) #mark thermal beginning in session sheet in XLS
@@ -375,7 +375,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                     duration = round(end_time - start_time, 1)
                     altitude_gain = round(end_altitude - start_altitude, 1)
                     avg_climb_rate = round(altitude_gain/duration, 1)
-                    if(altitude_gain >= THERMAL_MINIMUM_THRESHOLD):
+                    if(altitude_gain >= THERMAL_MINIMUM_GAIN_FT):
                         thermal_records.append(ThermalRecord(session_number, thermal_index, start_time, last_trough_bottom_index, end_time, i, start_altitude, end_altitude, duration, altitude_gain, avg_climb_rate))
                         ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude) #mark thermal beginning in session sheet in XLS
                         ws.cell(row=i, column=5, value=end_altitude) #mark thermal end in session sheet in XLS
@@ -395,7 +395,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                     duration = round(end_time - start_time, 1)
                     altitude_gain = round(end_altitude - start_altitude, 1)
                     avg_climb_rate = round(altitude_gain/duration, 1)
-                    if(altitude_gain >= THERMAL_MINIMUM_THRESHOLD):
+                    if(altitude_gain >= THERMAL_MINIMUM_GAIN_FT):
                         thermal_records.append(ThermalRecord(session_number, thermal_index, start_time, last_trough_bottom_index, end_time, i, start_altitude, end_altitude, duration, altitude_gain, avg_climb_rate))
                         ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude) #mark thermal beginning in session sheet in XLS
                         ws.cell(row=i, column=5, value=end_altitude) #mark thermal end in session sheet in XLS
