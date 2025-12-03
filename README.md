@@ -9,20 +9,19 @@ Oprey processes the vario telemetry data (altitude and rate of climb) in Spektru
 ![Alt text](images/session-profile.png?raw=true)
 **Session Altitude Chart with Thermal Annoations**
 <br>
-
+<br>
 ![Alt text](images/session-summary.png?raw=true)
 **Session Summary Table**
 <br>
-
-
+<br>
 ![Alt text](images/thermal-summary.png?raw=true)
 **Thermal Summary Table**
 <br>
-
+<br>
 ![Alt text](images/daily-session-log.png?raw=true)
 **Log of Daily Flight and Thermal Data** 
-
-
+<br>
+<br>
 ### Getting started with Osprey
 
 1. **Capture vario data** Set up your Spektrum transmitter to store telemetry data to the memory card.  The configuration to store telemetry data can be found in the Telemetry view of your Spektrum transmitter.  In the Telemetry view, click on "File Settings" and configure the file name and the trigger to initiate telemetry recording.  I use my assigned throttle cut switch to start and stop telemetry recording (e.g. throttle cut OFF initiates recording). 
