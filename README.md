@@ -1,5 +1,3 @@
-Osprey generates thermaling analytics for RC sailplanes and gliders by analyzing vario telemetry emitted by Spektrum recievers. 
-
 ### About Osprey
 Osprey provides insights into how many thermals you are catching, how long you're in them for, and the altitudes where you are entering and exiting them. You can use these analytics to better understand your thermaling performance, your thermalling progression over time, and even measure yourself against flying peers.
 
@@ -22,13 +20,13 @@ Oprey processes the vario telemetry data (altitude and rate of climb) in Spektru
 <br>
 <br>
 ![Alt text](images/daily-session-log.png?raw=true)
-**Log of Daily Flight and Thermal Data** 
+**Daily Flight and Launch and Thermal Data** 
 <br>
 <br>
 <br>
 ### Getting started with Osprey
 
-1. **Capture vario data** Set up your Spektrum transmitter to store telemetry data to the memory card.  The configuration to store telemetry data can be found in the Telemetry view of your Spektrum transmitter.  In the Telemetry view, click on "File Settings" and configure the file name and the trigger to initiate telemetry recording.  I use my assigned throttle cut switch to start and stop telemetry recording (e.g. throttle cut OFF initiates recording). 
+1. **Capture vario data** Set up your Spektrum transmitter to store telemetry data to a memory card.  The configuration to store telemetry data can be found in the Telemetry view of your Spektrum transmitter.  In the Telemetry view, click on "File Settings" and configure the file name and the trigger to initiate telemetry recording.  I use my throttle cut switch to start and stop telemetry recording (e.g. throttle cut OFF initiates recording). 
 
 2. **Copy the TLM file to your computer** After flying, copy the TLM file from the card to your computer using a card reader.  Then delete the TLM file on the memory card.  If you do not delete the file on the card, the next time you use Osprey it will process the new sesssions as well as older ones.
 
