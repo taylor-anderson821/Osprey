@@ -231,9 +231,9 @@ def identify_thermal_peaks(vario_records, session_records, session_number):
                 if(vario_records[i].altitude_smoothed - vario_records[i - THERMAL_MAX_CLIMB_RATE_LOOKBACK].altitude_smoothed
                    > THERMAL_MAX_CLIMB_RATE_FPS * THERMAL_MAX_CLIMB_RATE_LOOKBACK):
                     vario_records[i].thermal_peak = False
-                if(vario_records[i].thermal_peak == True):
-                    print("session", session_number, ": Thermal peak identified at", vario_records[i].timestamp, "s, Altitude:", 
-                      round(vario_records[i].altitude_smoothed,2), "ft, Vario:", round(vario_records[i].climb_rate,2), "ft/min")      
+                # if(vario_records[i].thermal_peak == True):
+                #     print("session", session_number, ": Thermal peak identified at", vario_records[i].timestamp, "s, Altitude:", 
+                #       round(vario_records[i].altitude_smoothed,2), "ft, Vario:", round(vario_records[i].climb_rate,2), "ft/min")      
  
 def identify_launch_peaks(vario_records, session_records, session_number):
 # Identifies launch peaks in the vario_records for the current session using the following logic:
@@ -255,8 +255,8 @@ def identify_launch_peaks(vario_records, session_records, session_number):
             # mark the launch peak at this record
             vario_records[i].launch_peak = True
             session_records[session_number].launch_count += 1
-            print("session", session_number, ": Launch peak identified at index", i, vario_records[i].timestamp, "s, "
-            "Altitude:", round(vario_records[i].altitude_smoothed,2))
+            # print("session", session_number, ": Launch peak identified at index", i, vario_records[i].timestamp, "s, "
+            # "Altitude:", round(vario_records[i].altitude_smoothed,2))
 
 def identify_trough_bottoms(vario_records, session_number):
 # Identifies trough bottoms in the vario_records for the current session using the following logic:
