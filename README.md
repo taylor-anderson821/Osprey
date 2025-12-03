@@ -30,9 +30,9 @@ Oprey processes altitude and rate of climb data in Spektrum TLM files to indenti
 
 3. **Install Osprey**  Click the green 'Code' button at the top of this page and select 'Download ZIP'.  Double click on the ZIP to open it.
 
-4. **Run Osprey**  You can use the executables for Mac or Windows, or run the Osprey Python script. The first time Osprey runs, you will be asked to select units of measure (metric or imperial).  Then you will be asked to select the TLM file.  Osprey will then process the file and generate the XLSX files.
+4. **Run Osprey**  You can use the executables for Mac or Windows, or run the Osprey Python script. The first time Osprey runs, you will be asked to select units of measure (metric or imperial).  Then you will be asked to select the TLM file.  Osprey will then process the file and write the XLSX files to the same location.
 
-5. **Review your analytics** If you have Excel on your computer, double click either file to see the analytics sheets.  Otherwise, upload your files to Google Drive and use Google Sheets to view them (that's what I use).
+5. **Review your analytics** If you have Excel on your computer, double click either XLSX file to view the analytics sheets.  Otherwise, upload your files to Google Drive and use Google Sheets to view them (that's what I use).
 
 ### Next steps
 Osprey software was developed using telemetry data from electric gliders. It will likely work for DLG gliders -- I just haven't had any test data. If you have a DLG glider, post an issue by navigating to the top of this page and clicking the Issues tab and attach your TLM data.
