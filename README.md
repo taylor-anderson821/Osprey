@@ -20,7 +20,7 @@ Oprey processes altitude and rate of climb data in Spektrum TLM files to indenti
 <br>
 <br>
 <img src="images/daily-session-log.png" alt="Placeholder" width="70%" height="70%">
-**Daily Soaring Log** 
+<br>**Daily Soaring Log** 
 <br>
 ### Getting started with Osprey
 
