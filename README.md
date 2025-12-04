@@ -1,3 +1,5 @@
+ Osprey generates soaring analytics for RC sailplanes and gliders by analyzing vario telemetry from Spektrum recievers.
+
 ### About Osprey
 Osprey provides insights into how many thermals you are catching, how long you're in them, and the altitudes where you are entering and exiting them. You can use these analytics to better understand your thermalling performance and track your progression over time.
 
