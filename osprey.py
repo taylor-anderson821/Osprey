@@ -8,12 +8,19 @@ LAUNCH_MIN_CLIMB_RATE_FPS = 21 # minimum launch climb rate (ft/s) to consider fo
 LAUNCH_MIN_CLIMB_RATE_LOOKBACK = 5 #number of seconds to look back to check for high climb rate before launch peak (all samples in seconds)
 TROUGH_CANDIDATE_WINDOW = 10 # number of seconds to look back to check for low climb rate before trough bottom candidate
 SESSION_MINIMUM_DURATION = 30
+M_TO_FT = 3.28084
 
 import struct
 import numpy
 import os
 import openpyxl
 import datetime
+import configparser
+from tkinter import Tk, filedialog
+
+# just two globals :)
+tlm_file_path = ''
+is_metric = False
 
 class VarioRecord:
     def __init__(self,timestamp, altitude, climb_rate):
@@ -69,7 +76,7 @@ class DailySessionSummary:
         self.thermal_launch_ratio = 0.0
         self.total_thermal_duration_pct = 0.0
 
-tlm_file_path = ''
+
 
 def process_header_packets(f):
     """
@@ -140,7 +147,10 @@ def summarize_daily_sessions(session_records):
         wb = openpyxl.Workbook()
         ws = wb["Sheet"]
         ws.title = "Daily Summary"
-        headers = ['Date', 'Launches', 'Thermals', 'Total Thm Gain (ft)', 'Total Thm Duration', 'Total Flying Duration', 'Thermal/Lauch Ratio', 'Thermal Duration Pct' ]
+        if is_metric:
+            headers = ['Date', 'Launches', 'Thermals', 'Total Thm Gain (m)', 'Total Thm Duration', 'Total Flying Duration', 'Thermal/Lauch Ratio', 'Thermal Duration Pct' ]
+        else:
+            headers = ['Date', 'Launches', 'Thermals', 'Total Thm Gain (ft)', 'Total Thm Duration', 'Total Flying Duration', 'Thermal/Lauch Ratio', 'Thermal Duration Pct' ]
         for col, header in enumerate(headers, start=1):
             ws.cell(row=1, column=col, value=header)
 
@@ -171,7 +181,7 @@ def summarize_daily_sessions(session_records):
         ws.cell(row=rowIndex, column=1, value=daily_session_summary[i].date)
         ws.cell(row=rowIndex, column=2, value=daily_session_summary[i].launch_count)
         ws.cell(row=rowIndex, column=3, value=daily_session_summary[i].thermal_count)
-        cell = ws.cell(row=rowIndex, column=4, value=daily_session_summary[i].total_thermal_altitude_gain)
+        cell = ws.cell(row=rowIndex, column=4, value=daily_session_summary[i].total_thermal_altitude_gain / (M_TO_FT if is_metric  else 1))
         cell.number_format = '#,##0'
         ws.cell(row=rowIndex, column=5, value=daily_session_summary[i].total_thermal_duration_hms)
         ws["E{}".format(rowIndex)].alignment = openpyxl.styles.Alignment(horizontal='right')
@@ -324,15 +334,17 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                    # mark caught thermal from launch peak to thermal peak
                     start_time = round(vario_records[j].timestamp, 1)
                     end_time = round(vario_records[i].timestamp, 1)
-                    start_altitude = round(vario_records[j].altitude_smoothed, 1)
+                    start_altitude = round(vario_records[j].altitude_smoothed, 1) 
                     end_altitude = round(vario_records[i].altitude_smoothed, 1)
                     duration = round(end_time - start_time, 1)
                     altitude_gain = round(end_altitude - start_altitude, 1)
                     avg_climb_rate = round(altitude_gain/duration, 1)
                     if(altitude_gain >= THERMAL_MINIMUM_GAIN_FT):
                         thermal_records.append(ThermalRecord(session_number, thermal_index, start_time, j, end_time, i, start_altitude, end_altitude, duration, altitude_gain, avg_climb_rate))
-                        ws.cell(row=j, column=4, value=start_altitude) #mark thermal beginning in session sheet in XLS
-                        ws.cell(row=i, column=5, value=end_altitude) #mark thermal end in session sheet in XLS
+                        cell = ws.cell(row=j, column=4, value=start_altitude / (M_TO_FT if is_metric  else 1) ) #mark thermal beginning in session sheet in XLS
+                        cell.number_format = '0.0'
+                        cell = ws.cell(row=i, column=5, value=end_altitude /(M_TO_FT if is_metric  else 1) ) #mark thermal end in session sheet in XLS
+                        cell.number_format = '0.0'
                         session_records[session_number].thermal_count += 1
                         session_records[session_number].total_thermal_altitude_gain += altitude_gain
                         session_records[session_number].total_thermal_duration += duration
@@ -353,8 +365,10 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                         if(altitude_gain >= THERMAL_MINIMUM_GAIN_FT):
                             thermal_records.append(ThermalRecord(session_number, thermal_index, start_time, last_trough_bottom_index, 
                                                              end_time, i, start_altitude, end_altitude, duration, altitude_gain, avg_climb_rate ))                       
-                            ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude) #mark thermal beginning in session sheet in XLS
-                            ws.cell(row=i, column=5, value=end_altitude) #mark thermal end in session sheet in XLS
+                            cell = ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude / (M_TO_FT if is_metric  else 1) ) #mark thermal beginning in session sheet in XLS
+                            cell.number_format = '0.0'
+                            cell = ws.cell(row=i, column=5, value=end_altitude / (M_TO_FT if is_metric  else 1) ) #mark thermal end in session sheet in XLS
+                            cell.number_format = '0.0'
                             session_records[session_number].thermal_count += 1
                             session_records[session_number].total_thermal_altitude_gain += altitude_gain
                             session_records[session_number].total_thermal_duration += duration
@@ -377,8 +391,8 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                     avg_climb_rate = round(altitude_gain/duration, 1)
                     if(altitude_gain >= THERMAL_MINIMUM_GAIN_FT):
                         thermal_records.append(ThermalRecord(session_number, thermal_index, start_time, last_trough_bottom_index, end_time, i, start_altitude, end_altitude, duration, altitude_gain, avg_climb_rate))
-                        ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude) #mark thermal beginning in session sheet in XLS
-                        ws.cell(row=i, column=5, value=end_altitude) #mark thermal end in session sheet in XLS
+                        ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude / (M_TO_FT if is_metric  else 1)) #mark thermal beginning in session sheet in XLS
+                        ws.cell(row=i, column=5, value=end_altitude / (M_TO_FT if is_metric  else 1)) #mark thermal end in session sheet in XLS
                         session_records[session_number].thermal_count += 1
                         session_records[session_number].total_thermal_altitude_gain += altitude_gain
                         session_records[session_number].total_thermal_duration += duration
@@ -397,8 +411,10 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                     avg_climb_rate = round(altitude_gain/duration, 1)
                     if(altitude_gain >= THERMAL_MINIMUM_GAIN_FT):
                         thermal_records.append(ThermalRecord(session_number, thermal_index, start_time, last_trough_bottom_index, end_time, i, start_altitude, end_altitude, duration, altitude_gain, avg_climb_rate))
-                        ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude) #mark thermal beginning in session sheet in XLS
-                        ws.cell(row=i, column=5, value=end_altitude) #mark thermal end in session sheet in XLS
+                        cell = ws.cell(row=last_trough_bottom_index, column=4, value=start_altitude / (M_TO_FT if is_metric  else 1)) #mark thermal beginning in session sheet in XLS
+                        cell.number_format = '0.0'
+                        cell = ws.cell(row=i, column=5, value=end_altitude / (M_TO_FT if is_metric  else 1) ) #mark thermal end in session sheet in XLS
+                        cell.number_format = '0.0'
                         session_records[session_number].thermal_count += 1
                         session_records[session_number].total_thermal_altitude_gain += altitude_gain
                         session_records[session_number].total_thermal_duration += duration
@@ -426,7 +442,10 @@ def add_line_chart_to_ws(ws):
     chart1 = LineChart()
     chart1.title = "Session Profile"
     chart1.x_axis.title = "time (s)"
-    chart1.y_axis.title = "altitude (ft)"
+    if is_metric:
+        chart1.y_axis.title = "altitude (m)"
+    else:
+        chart1.y_axis.title = "altitude (ft)"
    # chart1.x_axis = NumericAxis(crossAx=100)
     chart1.x_axis.number_format = '#.0'
     chart1.height = 10 
@@ -468,7 +487,10 @@ def add_thermal_bar_chart_to_ws(ws):
     timestamps = Reference(ws, min_col=1, min_row=2, max_row=ws.max_row)
     chart1.set_categories(timestamps)    
     chart1.x_axis.title = "Thermal Number"
-    chart1.y_axis.title = "alt (ft)"
+    if is_metric:
+        chart1.y_axis.title = "alt (m)"
+    else:
+        chart1.y_axis.title = "alt (ft)"
     ws.add_chart(chart1, "H2")
 
 def add_session_bar_chart_to_ws(ws):
@@ -533,11 +555,16 @@ def process_payload_packet(f, wb, thermal_records, session_records, quitProgram)
                 rowIndex = i + 2
                 ws.cell(row=rowIndex, column=1, value=i)
                 ws.cell(row=rowIndex, column=2, value=thermal_records[i].session_number)
-                ws.cell(row=rowIndex, column=3, value=thermal_records[i].start_altitude)
-                ws.cell(row=rowIndex, column=4, value=thermal_records[i].end_altitude)
-                ws.cell(row=rowIndex, column=5, value=thermal_records[i].duration)
-                ws.cell(row=rowIndex, column=6, value=thermal_records[i].altitude_gain)
-                ws.cell(row=rowIndex, column=7, value=thermal_records[i].avg_climb_rate)
+                cell = ws.cell(row=rowIndex, column=3, value=thermal_records[i].start_altitude / (M_TO_FT if is_metric  else 1))
+                cell.number_format = '0.0'
+                cell = ws.cell(row=rowIndex, column=4, value=thermal_records[i].end_altitude / (M_TO_FT if is_metric  else 1))
+                cell.number_format = '0.0'
+                cell = ws.cell(row=rowIndex, column=5, value=thermal_records[i].duration)
+                cell.number_format = '0.0'
+                cell = ws.cell(row=rowIndex, column=6, value=thermal_records[i].altitude_gain / (M_TO_FT if is_metric  else 1))
+                cell.number_format = '0.0'
+                cell = ws.cell(row=rowIndex, column=7, value=thermal_records[i].avg_climb_rate / (M_TO_FT if is_metric  else 1))
+                cell.number_format = '0.0'
             add_thermal_bar_chart_to_ws(ws)
 
             # Add rows to the Sessions ws
@@ -550,7 +577,8 @@ def process_payload_packet(f, wb, thermal_records, session_records, quitProgram)
                 ws["C{}".format(rowIndex)].alignment = openpyxl.styles.Alignment(horizontal='right')
                 ws.cell(row=rowIndex, column=4, value=session_records[i].launch_count)
                 ws.cell(row=rowIndex, column=5, value=session_records[i].thermal_count)
-                ws.cell(row=rowIndex, column=6, value=session_records[i].total_thermal_altitude_gain)
+                cell = ws.cell(row=rowIndex, column=6, value=session_records[i].total_thermal_altitude_gain / (M_TO_FT if is_metric  else 1))
+                cell.number_format = '0.0'
                 ws.cell(row=rowIndex, column=7, value=session_records[i].total_thermal_duration_hms)
                 ws["G{}".format(rowIndex)].alignment = openpyxl.styles.Alignment(horizontal='right')
                 ws.cell(row=rowIndex, column=8, value=round(session_records[i].thermal_launch_ratio, 1))
@@ -611,7 +639,10 @@ def process_payload_packet(f, wb, thermal_records, session_records, quitProgram)
                     # Create new sheet
                     ws = wb.create_sheet(title=f"Ssn{process_payload_packet.session_number}")
                     # Set headers
-                    headers = ["TS (s)", "Alt (ft)", "Clmb Rt (ft/min)", "Therm Start", "Therm End"]
+                    if is_metric:
+                        headers = ["TS (s)", "Alt (m)", "Clmb Rt (m/min)", "Therm Start", "Therm End"]
+                    else:
+                        headers = ["TS (s)", "Alt (ft)", "Clmb Rt (ft/min)", "Therm Start", "Therm End"]
                     for col, header in enumerate(headers, start=1):
                         ws.cell(row=1, column=col, value=header)
 
@@ -631,15 +662,17 @@ def process_payload_packet(f, wb, thermal_records, session_records, quitProgram)
                 delta_1500ms_bytes = f.read(2) # we read this vario value, but don't do anything with it
                 delta_2000ms_bytes = f.read(2) # we read this vario value, but don't do anything with it
                 delta_3000ms_bytes = f.read(2) # we read this vario value, but don't do anything with it
-                altitude = struct.unpack('>H', altitude_bytes)[0]/10.0 * 3.28084  # Convert to feet
-                delta_1000ms = struct.unpack('>h', delta_1000ms_bytes)[0]/10.0 * 3.28084 # Convert to feet
+                altitude = struct.unpack('>H', altitude_bytes)[0]/10.0 * M_TO_FT  # Convert to feet
+                delta_1000ms = struct.unpack('>h', delta_1000ms_bytes)[0]/10.0 * M_TO_FT # Convert to feet
                 delta_timestamp_hundreths = time_stamp_hundreths - timestamp_offset_hundreths
                 delta_timestamp = delta_timestamp_hundreths / 100.0  # Convert to seconds
                 
                 if(altitude < 1000): # write to XLS only for valid data (altitiude under 1000 ft)
                     ws.cell(row=rowIndex, column=1, value=round(delta_timestamp, 1))
-                    ws.cell(row=rowIndex, column=2, value=round(altitude, 1))
-                    ws.cell(row=rowIndex, column=3, value=round(delta_1000ms, 1))
+                    cell = ws.cell(row=rowIndex, column=2, value=round(altitude, 1)/ (M_TO_FT if is_metric  else 1))
+                    cell.number_format = '0.0'
+                    cell = ws.cell(row=rowIndex, column=3, value=round(delta_1000ms, 1) / (M_TO_FT if is_metric  else 1))
+                    cell.number_format = '0.0'
                     vario_records.append(VarioRecord(delta_timestamp, altitude, delta_1000ms))    
                     varioPacketCount += 1
                     rowIndex += 1
@@ -655,45 +688,33 @@ def process_payload_packet(f, wb, thermal_records, session_records, quitProgram)
                 return(False) # do not quit program
 
 
-'''def read_config():
+def read_config_file():
+    global is_metric
+    
     # Create a ConfigParser object
     config = configparser.ConfigParser()
-
+    path = os.path.splitext(__file__)[0]
+    ini_file_path = path + '_config.ini'
     # Read the configuration file
     try:
-        f = open('osprey_config.ini', 'r')
-        
+        f = open(ini_file_path, 'r')
     except Exception as e:
         units = input("Select the units of measure.  Enter 'm' for metric, or 'i' for imperial: ")
-        f= open('osprey_config.ini', 'r')
         if units == 'i' or units == 'I':
-            config_string = "units = imperial"
+            config['General'] = {'units' : 'imperial'}
         elif units == 'm' or units == 'M':
-            config_string = "units = metric"
+            config['General'] = {'units' : 'metric'}
         else:
-            print("Invalid units entered, using metric.")
-        f.write("[General]\n")
-        f.write(config_string)
+            print("Invalid units entered, using metric.  Edit osprey_config.ini to change")
+            config['General'] = {'units' : 'metric'}
+        
+        with open(ini_file_path, 'w') as configfile:
+            config.write(configfile)
 
-    units = config.get('General', 'units')
-        config_values = {
-        'units': units
-    }
-    
-    # Return a dictionary with the retrieved values
-    return config_values '''
+    config.read(ini_file_path)
+    if(config['General']['units'] == 'metric'):
+        is_metric = True
 
-
-# if __name__ == "__main__":
-    # Call the function to read the configuration file
-    # config_data = read_config()
-
-    # Print the retrieved values
-    # print("Debug Mode:", config_data['debug_mode'])
-    # print("Log Level:", config_data['log_level'])
-    # print("Database Name:", config_data['db_name'])
-    # print("Database Host:", config_data['db_host'])
-    # print("Database Port:", config_data['db_port'])
 
 def main():
     thermal_records = []
@@ -701,17 +722,18 @@ def main():
     quitProgram = False
 
     source_dir = os.path.abspath(__file__)
+    read_config_file()
 
     # Ask user for input file
     # filename = input("Enter the TLM file path: ")
     global tlm_file_path 
     tlm_file_path = "/Users/tayloranderson/dev/spektrum/Avanti.TLM"
 
-    # tlm_file_path = filedialog.askopenfilename(
-    #     initialdir=source_dir,
-    #     title="Select Spektrum TLM file",
-    #     filetypes=[("Spektrum log data", "*.tlm"), ("All files", "*.*")]
-    # )
+    tlm_file_path = filedialog.askopenfilename(
+        initialdir=source_dir,
+        title="Select Spektrum TLM file",
+        filetypes=[("Spektrum log data", "*.tlm"), ("All files", "*.*")]
+    )
   
     if not os.path.exists(tlm_file_path):
         print(f"Error: File '{tlm_file_path}' not found.")
@@ -728,7 +750,12 @@ def main():
     wb = openpyxl.Workbook()
     ws = wb["Sheet"]
     ws.title = "Sessions"
-    headers = ['Session #', 'Session Start', 'Session Duration', 'Launches', 'Thermals', 'Total Thm Alt Gain (ft)', 'Total Thm Duration', 'Thermal/Lauch Ratio']
+    
+    if is_metric:
+        headers = ['Session #', 'Session Start', 'Session Duration', 'Launches', 'Thermals', 'Total Thm Alt Gain (m)', 'Total Thm Duration', 'Thermal/Lauch Ratio']
+    else:
+        headers = ['Session #', 'Session Start', 'Session Duration', 'Launches', 'Thermals', 'Total Thm Alt Gain (ft)', 'Total Thm Duration', 'Thermal/Lauch Ratio']
+    
     for col, header in enumerate(headers, start=1):
         ws.cell(row=1, column=col, value=header)
 
@@ -746,8 +773,13 @@ def main():
 
      # Also set up Thermals worksheet
     ws = wb.create_sheet(title=f"Thermals")
-    headers = ['Thermal #', 'Session #', 'Start Alt (ft)', 
+    if is_metric:
+        headers = ['Thermal #', 'Session #', 'Start Alt (m)', 
+                'End Alt (m)', 'Therm Dur (s)', 'Alt Gain (m)', 'Avg Clb Rt (m/s)']
+    else:
+        headers = ['Thermal #', 'Session #', 'Start Alt (ft)', 
                 'End Alt (ft)', 'Therm Dur (s)', 'Alt Gain (ft)', 'Avg Clb Rt (ft/s)']
+    
     for col, header in enumerate(headers, start=1):
                 ws.cell(row=1, column=col, value=header)
 
