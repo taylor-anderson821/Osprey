@@ -727,7 +727,6 @@ def main():
     # Ask user for input file
     # filename = input("Enter the TLM file path: ")
     global tlm_file_path 
-    tlm_file_path = "/Users/tayloranderson/dev/spektrum/Avanti.TLM"
 
     tlm_file_path = filedialog.askopenfilename(
         initialdir=source_dir,
