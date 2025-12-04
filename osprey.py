@@ -694,7 +694,7 @@ def read_config_file():
     # Create a ConfigParser object
     config = configparser.ConfigParser()
     path = os.path.splitext(__file__)[0]
-    ini_file_path = path + '_config.ini'
+    ini_file_path = path + '_config.txt'
     # Read the configuration file
     try:
         f = open(ini_file_path, 'r')
@@ -705,7 +705,7 @@ def read_config_file():
         elif units == 'm' or units == 'M':
             config['General'] = {'units' : 'metric'}
         else:
-            print("Invalid units entered, using metric.  Edit osprey_config.ini to change")
+            print("Invalid units entered, using metric.  Edit osprey_config.txt to change")
             config['General'] = {'units' : 'metric'}
         
         with open(ini_file_path, 'w') as configfile:
