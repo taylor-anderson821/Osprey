@@ -272,6 +272,7 @@ def create_flying_location(
     
     db_location = models.FlyingLocation(
         name=location.name,
+        country=location.country,
         latitude=location.latitude,
         longitude=location.longitude,
         submitted_by=user_id,
@@ -282,6 +283,35 @@ def create_flying_location(
     db.commit()
     db.refresh(db_location)
     return db_location
+
+@app.put("/api/sessions/{session_id}/location")
+def update_session_location(
+    session_id: int,
+    location_id: int,
+    user_id: str = "demo_user",
+    db: Session = Depends(get_db)
+):
+    """Update session location"""
+    session = db.query(models.FlightSession).filter(
+        models.FlightSession.id == session_id,
+        models.FlightSession.user_id == user_id
+    ).first()
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Verify location exists
+    location = db.query(models.FlyingLocation).filter(
+        models.FlyingLocation.id == location_id
+    ).first()
+    
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    
+    session.location_id = location_id
+    db.commit()
+    
+    return {"message": "Location updated successfully"}
 
 @app.put("/api/locations/{location_id}/approve")
 def approve_flying_location(

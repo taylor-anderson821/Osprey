@@ -55,6 +55,7 @@ class DailySummary(BaseModel):
 
 class FlyingLocationBase(BaseModel):
     name: str
+    country: Optional[str] = None
     latitude: float
     longitude: float
 
@@ -65,6 +66,7 @@ class FlyingLocationResponse(FlyingLocationBase):
     id: int
     approved: bool
     created_at: datetime
+    submitted_by: Optional[str] = None
     
     class Config:
         from_attributes = True

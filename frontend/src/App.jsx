@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Upload, BarChart3, TrendingUp, Settings as SettingsIcon, Calendar, User, Shield } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import SessionList from './components/SessionList';
@@ -10,14 +11,13 @@ import Admin from './components/Admin';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
-function App() {
+function AppContent() {
   const [sessions, setSessions] = useState([]);
-  const [selectedSession, setSelectedSession] = useState(null);
-  const [activeTab, setActiveTab] = useState('sessions');
-  const [loading, setLoading] = useState(false);
   const [selectedDate, setSelectedDate] = useState('all');
   const [userProfile, setUserProfile] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const fetchSessions = async () => {
     try {
@@ -47,22 +47,27 @@ function App() {
 
   const handleUploadSuccess = () => {
     fetchSessions();
-    setActiveTab('sessions');
+    navigate('/sessions');
   };
 
-  const handleSessionClick = async (sessionId, sessionIndex) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/api/sessions/${sessionId}`);
-      const data = await response.json();
-      setSelectedSession({ ...data, sessionIndex });
-      setActiveTab('detail');
-    } catch (error) {
-      console.error('Error fetching session detail:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleSessionClick = (sessionId, sessionIndex) => {
+    navigate(`/sessions/${sessionId}`);
   };
+
+  // Determine active tab from current route
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.startsWith('/sessions/')) return 'detail';
+    if (path === '/sessions') return 'sessions';
+    if (path === '/daily') return 'daily';
+    if (path === '/upload') return 'upload';
+    if (path === '/settings') return 'settings';
+    if (path === '/profile') return 'profile';
+    if (path === '/admin') return 'admin';
+    return 'sessions';
+  };
+
+  const activeTab = getActiveTab();
 
   return (
     <div className="min-h-screen bg-gray-900">
@@ -88,8 +93,8 @@ function App() {
       <nav className="bg-gray-800 border-b border-gray-700">
         <div className="container mx-auto px-4">
           <div className="flex gap-4">
-            <button
-              onClick={() => setActiveTab('profile')}
+            <Link
+              to="/profile"
               className={`px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'profile'
                   ? 'border-blue-500 text-blue-400'
@@ -98,9 +103,9 @@ function App() {
             >
               <User className="inline mr-2" size={18} />
               Profile
-            </button>
-            <button
-              onClick={() => setActiveTab('daily')}
+            </Link>
+            <Link
+              to="/daily"
               className={`px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'daily'
                   ? 'border-blue-500 text-blue-400'
@@ -109,9 +114,9 @@ function App() {
             >
               <Calendar className="inline mr-2" size={18} />
               Daily Summary
-            </button>
-            <button
-              onClick={() => setActiveTab('sessions')}
+            </Link>
+            <Link
+              to="/sessions"
               className={`px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'sessions' || activeTab === 'detail'
                   ? 'border-blue-500 text-blue-400'
@@ -120,10 +125,10 @@ function App() {
             >
               <BarChart3 className="inline mr-2" size={18} />
               Sessions
-            </button>
+            </Link>
             {isAdmin && (
-              <button
-                onClick={() => setActiveTab('admin')}
+              <Link
+                to="/admin"
                 className={`px-4 py-3 font-medium border-b-2 transition ${
                   activeTab === 'admin'
                     ? 'border-blue-500 text-blue-400'
@@ -132,10 +137,10 @@ function App() {
               >
                 <Shield className="inline mr-2" size={18} />
                 Admin
-              </button>
+              </Link>
             )}
-            <button
-              onClick={() => setActiveTab('upload')}
+            <Link
+              to="/upload"
               className={`px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'upload'
                   ? 'border-blue-500 text-blue-400'
@@ -144,9 +149,9 @@ function App() {
             >
               <Upload className="inline mr-2" size={18} />
               Upload
-            </button>
-            <button
-              onClick={() => setActiveTab('settings')}
+            </Link>
+            <Link
+              to="/settings"
               className={`px-4 py-3 font-medium border-b-2 transition ${
                 activeTab === 'settings'
                   ? 'border-blue-500 text-blue-400'
@@ -155,42 +160,74 @@ function App() {
             >
               <SettingsIcon className="inline mr-2" size={18} />
               Settings
-            </button>
+            </Link>
           </div>
         </div>
       </nav>
 
       <main className="container mx-auto px-4 py-8">
-        {activeTab === 'upload' && <FileUpload onSuccess={handleUploadSuccess} />}
-        {activeTab === 'sessions' && (
-          <SessionList 
-            sessions={sessions} 
-            onSessionClick={handleSessionClick}
-            initialSelectedDate={selectedDate}
-            onSessionDeleted={fetchSessions}
-          />
-        )}
-        {activeTab === 'detail' && selectedSession && (
-          <SessionDetail 
-            session={selectedSession} 
-            sessions={sessions}
-            onBack={() => setActiveTab('sessions')}
-            onSessionChange={handleSessionClick}
-          />
-        )}
-        {activeTab === 'daily' && (
-          <DailySummary 
-            onDateClick={(date) => {
-              setSelectedDate(date);
-              setActiveTab('sessions');
-            }}
-          />
-        )}
-        {activeTab === 'profile' && <Profile />}
-        {activeTab === 'admin' && <Admin />}
-        {activeTab === 'settings' && <Settings />}
+        <Routes>
+          <Route path="/" element={<Profile />} />
+          <Route path="/sessions" element={<SessionList sessions={sessions} onSessionClick={handleSessionClick} initialSelectedDate={selectedDate} onSessionDeleted={fetchSessions} />} />
+          <Route path="/sessions/:sessionId" element={<SessionDetailWrapper sessions={sessions} onSessionChange={handleSessionClick} />} />
+          <Route path="/daily" element={<DailySummary onDateClick={(date) => { setSelectedDate(date); navigate('/sessions'); }} />} />
+          <Route path="/upload" element={<FileUpload onSuccess={handleUploadSuccess} />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
       </main>
     </div>
+  );
+}
+
+function SessionDetailWrapper({ sessions, onSessionChange }) {
+  const { sessionId } = useParams();
+  const navigate = useNavigate();
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSession = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`${API_URL}/api/sessions/${sessionId}`);
+        const data = await response.json();
+        const sessionIndex = sessions.findIndex(s => s.id === parseInt(sessionId));
+        setSession({ ...data, sessionIndex });
+      } catch (error) {
+        console.error('Error fetching session detail:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSession();
+  }, [sessionId, sessions]);
+
+  if (loading) {
+    return <div className="text-white text-center">Loading...</div>;
+  }
+
+  if (!session) {
+    return <div className="text-white text-center">Session not found</div>;
+  }
+
+  return (
+    <SessionDetail 
+      session={session} 
+      sessions={sessions}
+      onBack={() => navigate('/sessions')}
+      onSessionChange={onSessionChange}
+    />
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 

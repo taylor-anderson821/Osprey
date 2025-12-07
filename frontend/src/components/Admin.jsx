@@ -77,6 +77,9 @@ export default function Admin() {
                 <div>
                   <h4 className="font-semibold text-white">{location.name}</h4>
                   <p className="text-sm text-gray-400">
+                    {location.country}
+                  </p>
+                  <p className="text-sm text-gray-400">
                     Lat: {location.latitude.toFixed(4)}, Lon: {location.longitude.toFixed(4)}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
@@ -117,6 +120,9 @@ export default function Admin() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-semibold text-white">{location.name}</h4>
+                    <p className="text-sm text-gray-400">
+                      {location.country}
+                    </p>
                     <p className="text-sm text-gray-400">
                       Lat: {location.latitude.toFixed(4)}, Lon: {location.longitude.toFixed(4)}
                     </p>

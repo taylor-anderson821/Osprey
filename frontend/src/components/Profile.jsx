@@ -6,12 +6,14 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 export default function Profile() {
   const [profile, setProfile] = useState(null);
   const [sessions, setSessions] = useState([]);
+  const [dailySummary, setDailySummary] = useState([]);
   const [loading, setLoading] = useState(true);
   const [units, setUnits] = useState('imperial');
 
   useEffect(() => {
     fetchProfile();
     fetchSessions();
+    fetchDailySummary();
     // Load units from localStorage
     const savedUnits = localStorage.getItem('units') || 'imperial';
     setUnits(savedUnits);
@@ -36,6 +38,16 @@ export default function Profile() {
       console.error('Error fetching sessions:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchDailySummary = async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/daily-summary`);
+      const data = await response.json();
+      setDailySummary(data);
+    } catch (error) {
+      console.error('Error fetching daily summary:', error);
     }
   };
 
@@ -70,26 +82,29 @@ export default function Profile() {
     return `${hours}h ${minutes}m`;
   };
 
-  const formatThermalGain = (gain) => {
+  const formatThermalGain = (gainInFeet) => {
     if (units === 'imperial') {
       // 1 mile = 5280 feet
-      if (gain >= 5280) {
-        const miles = gain / 5280;
+      if (gainInFeet >= 5280) {
+        const miles = gainInFeet / 5280;
         return `${miles.toFixed(1)} mi`;
       }
-      return `${Math.round(gain).toLocaleString()} ft`;
+      return `${Math.round(gainInFeet).toLocaleString()} ft`;
     } else {
-      // Metric: assume gain is in meters
-      if (gain >= 1000) {
-        const km = gain / 1000;
+      // Metric: convert feet to meters first
+      const gainInMeters = gainInFeet * 0.3048;
+      
+      // Only show km if >= 1000m
+      if (gainInMeters >= 1000) {
+        const km = gainInMeters / 1000;
         return `${km.toFixed(1)} km`;
       }
-      return `${Math.round(gain).toLocaleString()} m`;
+      return `${Math.round(gainInMeters).toLocaleString()} m`;
     }
   };
 
   // Calculate totals
-  const totalSessions = sessions.length;
+  const flyingDays = dailySummary.length;
   const totalThermalGain = sessions.reduce((sum, s) => sum + s.total_thermal_gain, 0);
   const totalThermalDuration = sessions.reduce((sum, s) => sum + s.total_thermal_duration, 0);
   const totalFlightTime = sessions.reduce((sum, s) => sum + s.duration_seconds, 0);
@@ -157,13 +172,13 @@ export default function Profile() {
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Total Sessions */}
+              {/* Flying Days */}
               <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-xs font-medium text-gray-400">Total Sessions</h4>
+                  <h4 className="text-xs font-medium text-gray-400">Flying Days</h4>
                   <Plane size={18} className="text-blue-400" />
                 </div>
-                <p className="text-2xl font-bold text-white">{totalSessions}</p>
+                <p className="text-2xl font-bold text-white">{flyingDays}</p>
               </div>
 
               {/* Total Flight Duration */}
@@ -197,7 +212,7 @@ export default function Profile() {
             </div>
 
             {/* Session Records */}
-            {totalSessions > 0 && (
+            {sessions.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-700">
                 <h4 className="text-lg font-semibold text-white mb-3">Session Records</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

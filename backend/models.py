@@ -7,6 +7,7 @@ class FlightSession(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, index=True)
+    location_id = Column(Integer, ForeignKey("flying_locations.id"), nullable=True)
     start_time = Column(DateTime(timezone=True))
     duration_seconds = Column(Float)
     launch_count = Column(Integer)
@@ -17,6 +18,7 @@ class FlightSession(Base):
     altitude_data = Column(JSON)  # Stores time-series altitude data for charts
     
     thermals = relationship("Thermal", back_populates="session")
+    location = relationship("FlyingLocation")
 
 class Thermal(Base):
     __tablename__ = "thermals"
@@ -53,6 +55,7 @@ class FlyingLocation(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, index=True)
+    country = Column(String)
     latitude = Column(Float)
     longitude = Column(Float)
     submitted_by = Column(String, ForeignKey("users.id"))
