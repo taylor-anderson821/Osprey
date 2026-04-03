@@ -1,28 +1,27 @@
 # Osprey Flight Analytics
 
-Osprey is a soaring analytics webapp for RC sailplanes and gliders. It processes vario telemetry from Spektrum receivers to help you understand your thermalling performance and progression over time.
+Osprey is a web app that generates soaring analytics for RC sailplanes. It analyzes altitude and variometer telemetry from [Spektrum receivers](https://www.spektrumrc.com/aircraft-receivers/) to track thermalling performance and progression over time.
 
 ![Session Detail](images/session-detail.png)
 
 ## Features
 
 - **Session Charts** — Altitude profiles with thermal start/end markers for every flying session
-- **Thermal Detection** — Automatically identifies thermals, launches, and troughs from vario data
-- **Daily Summary** — Bar charts showing thermal gain and thermal duration % by day
+- **Thermal Detection** — Automatically identifies thermals, launches, and troughs from variometer data
+- **Daily Summary** — Bar charts showing thermal gain and thermal duration percentage by day
 - **Soaring Log** — Lifetime totals for flight time, thermal gain, and thermal duration
-- **Session & Thermal Maximums** — Personal records with one-click navigation to the record session
-- **Multi-model Support** — Tracks aircraft model name from TLM file headers
+- **Session & Thermal Maximums** — Personal records with one-click navigation to the session
 - **Imperial / Metric** — Toggle between ft and m in Settings
 
 ## How It Works
 
-Osprey parses `.TLM` files from Spektrum receivers. It reads altitude and climb rate data at 1-second intervals, applies a moving average to smooth the altitude trace, then identifies:
+Osprey parses `.TLM` files from Spektrum receivers. It downsamples altitude and variometer data at 1-second intervals and applies a moving average to smooth the altitude trace. It then identifies:
 
 - **Thermal peaks** — local altitude maxima above a minimum height threshold
-- **Launch peaks** — points associated with high climb rates (winch/bungee launches)
+- **Launch peaks** — points associated with high climb rates (motor launches)
 - **Trough bottoms** — local altitude minima between events
 
-Caught thermals are identified by working backwards from each thermal peak to find the corresponding launch peak or trough bottom. The result is stored in a PostgreSQL database and served via a FastAPI backend to a React frontend.
+Caught thermals are identified by working backwards from each thermal peak to find the corresponding launch peak or trough bottom. This processed telemetry is then stored in a PostgreSQL database and served via a FastAPI backend to a React frontend.
 
 ## Stack
 
@@ -43,20 +42,20 @@ Caught thermals are identified by working backwards from each thermal peak to fi
 ### Running Locally
 
 1. Clone the repo:
-   ```bash
+```bash
    git clone https://github.com/taylor-anderson821/Osprey.git
    cd Osprey
-   ```
+```
 
 2. Copy the environment file and configure if needed:
-   ```bash
+```bash
    cp .env.example .env
-   ```
+```
 
 3. Start all services:
-   ```bash
+```bash
    docker-compose up
-   ```
+```
 
 4. Open [http://localhost:5173](http://localhost:5173) in your browser.
 
@@ -64,7 +63,7 @@ Caught thermals are identified by working backwards from each thermal peak to fi
 
 In your Spektrum transmitter's Telemetry view, go to **File Settings** and configure:
 - A file name for the TLM output
-- A trigger switch to start/stop recording (e.g. throttle cut switch)
+- A trigger switch to start/stop recording (e.g. a throttle cut switch)
 
 ### Uploading Data to Osprey
 
@@ -82,8 +81,8 @@ In your Spektrum transmitter's Telemetry view, go to **File Settings** and confi
 
 ![Thermal Summary](images/session-list.png)
 
-
 ## Notes
 
-- Osprey was developed using telemetry from electric gliders. DLG glider data should also work, however I haven't tested the thermal detection algorithm on DLG data.
-- Please let me know if you think it is worthwhile for this to be hosted.
+- Osprey distinguishes between launches and thermals based on the rate of ascent. If you launch at a shallow or moderate climb rate (e.g. < 20 ft/s), Osprey will classify the launch as a thermal.
+- Osprey was developed using telemetry from electric gliders. DLG glider data should also work, though the thermal detection algorithm has not been tested on that data.
+- Feedback and hosting interest welcome — feel free to open an issue or reach out.
