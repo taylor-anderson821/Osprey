@@ -83,4 +83,3 @@ In your Spektrum transmitter's **Telemetry** view, go to **File Settings** and c
 
 - Osprey distinguishes between launches and thermals based on the rate of ascent. If you launch at a shallow or moderate climb rate (e.g. < 20 ft/s), Osprey will classify the launch as a thermal.
 - Osprey was developed using telemetry from electric gliders. DLG glider data should also work, though the thermal detection algorithm has not been tested on that data.
-- Feedback and hosting interest welcome — feel free to open an issue or reach out.
