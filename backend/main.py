@@ -59,7 +59,8 @@ async def upload_tlm_file(
             total_thermal_gain=session_data['total_thermal_gain'],
             total_thermal_duration=session_data['total_thermal_duration'],
             thermal_launch_ratio=session_data['thermal_launch_ratio'],
-            altitude_data=session_data['altitude_data']
+            altitude_data=session_data['altitude_data'],
+            aircraft_model=session_data.get('aircraft_model')
         )
         db.add(db_session)
         db.flush()
@@ -102,6 +103,36 @@ def get_sessions(
         .limit(limit)\
         .all()
     return sessions
+
+@app.get("/api/sessions-with-thermals", response_model=List[schemas.SessionDetail])
+def get_sessions_with_thermals(
+    user_id: str = "demo_user",
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """Get all sessions for a user with thermal data included"""
+    sessions = db.query(models.FlightSession)\
+        .filter(models.FlightSession.user_id == user_id)\
+        .order_by(models.FlightSession.start_time.asc())\
+        .offset(skip)\
+        .limit(limit)\
+        .all()
+    
+    # Add thermals to each session
+    result = []
+    for session in sessions:
+        thermals = db.query(models.Thermal)\
+            .filter(models.Thermal.session_id == session.id)\
+            .all()
+        
+        session_dict = {
+            **session.__dict__,
+            "thermals": thermals
+        }
+        result.append(session_dict)
+    
+    return result
 
 @app.get("/api/sessions/{session_id}", response_model=schemas.SessionDetail)
 def get_session_detail(
@@ -189,6 +220,38 @@ def delete_session(
     db.commit()
     
     return {"message": "Session deleted successfully"}
+
+@app.delete("/api/sessions")
+def delete_all_sessions(
+    user_id: str = "demo_user",
+    db: Session = Depends(get_db)
+):
+    """Delete all sessions and their associated thermals for a user"""
+    # Get all session IDs for this user
+    session_ids = db.query(models.FlightSession.id)\
+        .filter(models.FlightSession.user_id == user_id)\
+        .all()
+    
+    if not session_ids:
+        return {"message": "No sessions found to delete"}
+    
+    session_ids = [sid[0] for sid in session_ids]
+    
+    # Delete all thermals for these sessions
+    thermal_count = db.query(models.Thermal)\
+        .filter(models.Thermal.session_id.in_(session_ids))\
+        .delete(synchronize_session=False)
+    
+    # Delete all sessions for this user
+    session_count = db.query(models.FlightSession)\
+        .filter(models.FlightSession.user_id == user_id)\
+        .delete(synchronize_session=False)
+    
+    db.commit()
+    
+    return {
+        "message": f"Deleted {session_count} sessions and {thermal_count} thermals"
+    }
 
 @app.get("/health")
 def health_check():

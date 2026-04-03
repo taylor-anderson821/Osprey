@@ -28,6 +28,7 @@ class SessionSummary(BaseModel):
     total_thermal_gain: float
     total_thermal_duration: float
     thermal_launch_ratio: float
+    aircraft_model: Optional[str] = None
     
     class Config:
         from_attributes = True

@@ -16,6 +16,7 @@ class FlightSession(Base):
     total_thermal_duration = Column(Float)
     thermal_launch_ratio = Column(Float)
     altitude_data = Column(JSON)  # Stores time-series altitude data for charts
+    aircraft_model = Column(String, nullable=True)  # Aircraft model name from TLM file
     
     thermals = relationship("Thermal", back_populates="session")
     location = relationship("FlyingLocation")

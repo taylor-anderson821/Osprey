@@ -11,7 +11,7 @@ ALTITUDE_MOVING_AVG_WINDOW = 5
 THERMAL_CANDIDATE_WINDOW = 30
 THERMAL_MIN_PEAK_ALTITUDE_FT = 100
 THERMAL_MINIMUM_GAIN_FT = 25
-THERMAL_MAX_CLIMB_RATE_FPS = 9
+THERMAL_MAX_CLIMB_RATE_FPS = 7.5
 THERMAL_MAX_CLIMB_RATE_LOOKBACK = 5
 LAUNCH_MIN_CLIMB_RATE_FPS = 21
 LAUNCH_MIN_CLIMB_RATE_LOOKBACK = 5
@@ -265,19 +265,48 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
     if session_records[session_number].launch_count != 0:
         session_records[session_number].thermal_launch_ratio = session_records[session_number].thermal_count / session_records[session_number].launch_count
 
-def process_header_packets(f):
+def extract_model_name_from_header(header_data):
+    """Extract aircraft model name from header packet if it contains model info"""
+    if len(header_data) >= 13:
+        # Check if 5th byte (index 4) is 0x01 or 0x02, indicating model name packet
+        if header_data[4] in (0x01, 0x02):
+            # Model name starts at 13th byte (index 12)
+            model_bytes = header_data[12:]
+            # Find null terminator
+            null_index = model_bytes.find(0x00)
+            if null_index != -1:
+                model_bytes = model_bytes[:null_index]
+            try:
+                model_name = model_bytes.decode('ascii', errors='ignore').strip()
+                # Validate: must be printable ASCII, at least 2 chars
+                if model_name and len(model_name) >= 2 and model_name.isprintable():
+                    return model_name
+            except:
+                pass
+    return None
+
+def process_header_packets(f, extract_model=False):
     """Reads and skips header packets until finding a data packet"""
+    model_name = None
     while True:
         timestamp_bytes = f.read(4)
         if len(timestamp_bytes) < 4:
-            return None
+            return None if not extract_model else (None, model_name)
         timestamp = struct.unpack('<I', timestamp_bytes)[0]
         if timestamp == 0xFFFFFFFF:
-            skipped = f.read(32)
-            if len(skipped) < 32:
-                return None
+            header_data = f.read(32)
+            if len(header_data) < 32:
+                return None if not extract_model else (None, model_name)
+            
+            # If we're extracting model name and haven't found it yet
+            if extract_model and model_name is None:
+                # Reconstruct full header packet (4 bytes timestamp + 32 bytes data)
+                full_header = timestamp_bytes + header_data
+                extracted_model = extract_model_name_from_header(full_header)
+                if extracted_model:
+                    model_name = extracted_model
         else:
-            return timestamp
+            return timestamp if not extract_model else (timestamp, model_name)
 
 def process_tlm_file(file_obj, is_metric=False):
     """
@@ -287,8 +316,21 @@ def process_tlm_file(file_obj, is_metric=False):
     session_records = []
     thermal_records = []
     vario_records = []
+    session_vario_records = []  # Stores vario records per session for altitude data
     session_number = -1
+    aircraft_model = None
     
+    def finalize_session():
+        """Smooth and analyze the current session's vario records, then save them."""
+        if len(vario_records) > 0:
+            smooth_altitude_readings(vario_records)
+            identify_thermal_peaks(vario_records, session_records, session_number)
+            identify_launch_peaks(vario_records, session_records, session_number)
+            identify_trough_bottoms(vario_records, session_number)
+            identify_caught_thermals(vario_records, session_records, session_number, thermal_records)
+        # Always save (even if empty) so index stays aligned with session_records
+        session_vario_records.append(list(vario_records))
+
     def process_payload_packet(f):
         nonlocal session_number, vario_records
         
@@ -305,6 +347,8 @@ def process_tlm_file(file_obj, is_metric=False):
             session_start_timestamp_unix_bytes = f.read(4)
             session_start_timestamp_unix = struct.unpack('<I', session_start_timestamp_unix_bytes)[0]
             f.read(4)
+        else:
+            f.seek(-1, 1)  # Not a 0x7C packet, put the byte back
         
         vario_packet_count = 0
         
@@ -313,23 +357,14 @@ def process_tlm_file(file_obj, is_metric=False):
             
             # If EOF reached, process final session
             if len(time_stamp_hundreths_bytes) < 4:
-                if len(vario_records) > 0:
-                    smooth_altitude_readings(vario_records)
-                    identify_thermal_peaks(vario_records, session_records, session_number)
-                    identify_launch_peaks(vario_records, session_records, session_number)
-                    identify_trough_bottoms(vario_records, session_number)
-                    identify_caught_thermals(vario_records, session_records, session_number, thermal_records)
+                finalize_session()
                 return True  # EOF
             
             time_stamp_hundreths = struct.unpack('<I', time_stamp_hundreths_bytes)[0]
             
             # Check if we've reached another header block
             if time_stamp_hundreths == 0xFFFFFFFF and len(vario_records) > 0:
-                smooth_altitude_readings(vario_records)
-                identify_thermal_peaks(vario_records, session_records, session_number)
-                identify_launch_peaks(vario_records, session_records, session_number)
-                identify_trough_bottoms(vario_records, session_number)
-                identify_caught_thermals(vario_records, session_records, session_number, thermal_records)
+                finalize_session()
             
             if time_stamp_hundreths == 0xFFFFFFFF:
                 skipped = f.read(32)
@@ -347,13 +382,16 @@ def process_tlm_file(file_obj, is_metric=False):
                     # Check if this is the first vario packet
                     if vario_packet_count == 0:
                         session_number += 1
-                        # The Unix timestamp is in UTC, so we need to create a UTC-aware datetime
-                        # and mark it as UTC so FastAPI serializes it correctly
                         from datetime import timezone
                         if session_start_timestamp_unix:
-                            # Create UTC datetime and mark it as UTC
                             session_start_utc = datetime.fromtimestamp(session_start_timestamp_unix, tz=timezone.utc)
                             session_start_local_datetime = session_start_utc
+                        elif earliest_unix_ts:
+                            # Use earliest known timestamp from this file as the date,
+                            # but keep relative offset from session_records if available
+                            session_start_local_datetime = datetime.fromtimestamp(earliest_unix_ts, tz=timezone.utc)
+                        elif session_records:
+                            session_start_local_datetime = session_records[-1].start_time
                         else:
                             session_start_local_datetime = datetime.now(timezone.utc)
                         session_start_local_date = session_start_local_datetime.date()
@@ -369,7 +407,11 @@ def process_tlm_file(file_obj, is_metric=False):
                     
                     altitude = struct.unpack('>H', altitude_bytes)[0] / 10.0 * M_TO_FT
                     delta_1000ms = struct.unpack('>h', delta_1000ms_bytes)[0] / 10.0 * M_TO_FT
-                    delta_timestamp = (time_stamp_hundreths - timestamp_offset_hundreths) / 100.0
+                    # Handle 32-bit counter wraparound
+                    raw_delta = time_stamp_hundreths - timestamp_offset_hundreths
+                    if raw_delta < 0:
+                        raw_delta += 0x100000000  # 2^32
+                    delta_timestamp = raw_delta / 100.0
                     
                     if altitude < 1000:  # Only valid data
                         vario_records.append(VarioRecord(delta_timestamp, altitude, delta_1000ms))
@@ -378,6 +420,52 @@ def process_tlm_file(file_obj, is_metric=False):
                 vario_packet_count += 1
             else:
                 f.read(15)
+    
+    # First pass: scan file for aircraft model name AND earliest valid Unix timestamp
+    # The earliest timestamp will be used as fallback for sessions missing a 0x7C packet
+    file_obj.seek(0)
+    earliest_unix_ts = None
+
+    def scan_for_metadata(f):
+        nonlocal aircraft_model, earliest_unix_ts
+        f.seek(-4, 1)
+        f.read(4)  # re-read timestamp_offset (discard)
+        next_byte = f.read(1)
+        if next_byte[0] == 0x7C:
+            f.read(7)
+            ts_bytes = f.read(4)
+            ts = struct.unpack('<I', ts_bytes)[0]
+            f.read(4)
+            if ts > 1000000000:  # sanity check: must be after year 2001
+                if earliest_unix_ts is None or ts < earliest_unix_ts:
+                    earliest_unix_ts = ts
+        else:
+            f.seek(-1, 1)
+        # Skip rest of payload (read until next 0xFFFFFFFF or EOF)
+        while True:
+            b = f.read(4)
+            if len(b) < 4:
+                return True
+            val = struct.unpack('<I', b)[0]
+            if val == 0xFFFFFFFF:
+                f.read(32)
+                return False
+            f.read(1)
+            f.read(15)
+
+    while True:
+        result = process_header_packets(file_obj, extract_model=True)
+        if result is None or result[0] is None:
+            break
+        timestamp, model = result
+        if model and not aircraft_model:
+            aircraft_model = model
+        done = scan_for_metadata(file_obj)
+        if done:
+            break
+
+    # Reset file for main processing
+    file_obj.seek(0)
     
     # Main processing loop
     while True:
@@ -390,19 +478,35 @@ def process_tlm_file(file_obj, is_metric=False):
             break
     
     # Build response with session data
+    # Filter out sessions with bogus durations (negative or > 24 hours)
+    MAX_SESSION_DURATION = 86400  # 24 hours in seconds
+
     sessions = []
     for i, session_rec in enumerate(session_records):
+        if not (0 < session_rec.session_duration <= MAX_SESSION_DURATION):
+            continue
+
         # Get thermals for this session
         session_thermals = [t for t in thermal_records if t['session_number'] == i]
-        
-        # Build altitude data for charting - find vario records for this session
-        # Note: This is a simplified approach since we process sessions sequentially
+
+        # Build altitude data from the saved vario records for this session
+        # session_vario_records[i] holds the smoothed records from the single pass
         altitude_data = []
-        if i < len(session_records):
-            # We need to rebuild vario_records for each session from the file
-            # For now, return empty altitude_data - this would need file re-processing
-            altitude_data = []
-        
+        if i < len(session_vario_records):
+            records = session_vario_records[i]
+            thermal_start_times = set(t['start_time'] for t in session_thermals)
+            thermal_end_times = set(t['end_time'] for t in session_thermals)
+            altitude_data = [
+                {
+                    'timestamp': r.timestamp,
+                    'altitude': round(r.altitude_smoothed / (M_TO_FT if is_metric else 1), 1),
+                    'climb_rate': round(r.climb_rate / (M_TO_FT if is_metric else 1), 1),
+                    'thermal_start': any(abs(r.timestamp - t) < 0.6 for t in thermal_start_times),
+                    'thermal_end': any(abs(r.timestamp - t) < 0.6 for t in thermal_end_times),
+                }
+                for r in records
+            ]
+
         sessions.append({
             'session_number': i,
             'start_time': session_rec.start_time,
@@ -412,121 +516,11 @@ def process_tlm_file(file_obj, is_metric=False):
             'total_thermal_gain': session_rec.total_thermal_altitude_gain,
             'total_thermal_duration': session_rec.total_thermal_duration,
             'thermal_launch_ratio': session_rec.thermal_launch_ratio,
-            'altitude_data': altitude_data,  # Will be populated in second pass
-            'thermals': session_thermals
+            'altitude_data': altitude_data,
+            'thermals': session_thermals,
+            'aircraft_model': aircraft_model
         })
-    
-    # Second pass: populate altitude_data for each session
-    # Reset file and re-process to capture altitude data per session
-    file_obj.seek(0)
-    session_number = -1
-    current_session_vario_records = []
-    
-    def capture_altitude_data(f):
-        nonlocal session_number, current_session_vario_records
-        
-        f.seek(-4, 1)
-        timestamp_offset_hundreths_bytes = f.read(4)
-        timestamp_offset_hundreths = struct.unpack('<I', timestamp_offset_hundreths_bytes)[0]
-        next_byte = f.read(1)
-        
-        if next_byte[0] == 0x7C:
-            f.read(7)
-            f.read(4)
-            f.read(4)
-        
-        vario_packet_count = 0
-        temp_vario_records = []
-        
-        while True:
-            time_stamp_hundreths_bytes = f.read(4)
-            if len(time_stamp_hundreths_bytes) < 4:
-                if len(temp_vario_records) > 0 and session_number < len(sessions):
-                    smooth_altitude_readings(temp_vario_records)
-                    sessions[session_number]['altitude_data'] = [
-                        {
-                            'timestamp': round(r.timestamp, 1),
-                            'altitude': round(r.altitude_smoothed / (M_TO_FT if is_metric else 1), 1),
-                            'climb_rate': round(r.climb_rate / (M_TO_FT if is_metric else 1), 1),
-                            'thermal_start': False,
-                            'thermal_end': False
-                        }
-                        for r in temp_vario_records
-                    ]
-                return True
-            
-            time_stamp_hundreths = struct.unpack('<I', time_stamp_hundreths_bytes)[0]
-            
-            if time_stamp_hundreths == 0xFFFFFFFF and len(temp_vario_records) > 0:
-                smooth_altitude_readings(temp_vario_records)
-                if session_number < len(sessions):
-                    sessions[session_number]['altitude_data'] = [
-                        {
-                            'timestamp': round(r.timestamp, 1),
-                            'altitude': round(r.altitude_smoothed / (M_TO_FT if is_metric else 1), 1),
-                            'climb_rate': round(r.climb_rate / (M_TO_FT if is_metric else 1), 1),
-                            'thermal_start': False,
-                            'thermal_end': False
-                        }
-                        for r in temp_vario_records
-                    ]
-            
-            if time_stamp_hundreths == 0xFFFFFFFF:
-                f.read(32)
-                return False
-            
-            next_byte = f.read(1)
-            if len(next_byte) < 1:
-                return True
-            
-            if next_byte[0] == 0x40:
-                if vario_packet_count % 10 == 0:
-                    if vario_packet_count == 0:
-                        session_number += 1
-                        temp_vario_records = []
-                    
-                    f.read(1)
-                    altitude_bytes = f.read(2)
-                    f.read(2)
-                    f.read(2)
-                    delta_1000ms_bytes = f.read(2)
-                    f.read(6)
-                    
-                    altitude = struct.unpack('>H', altitude_bytes)[0] / 10.0 * M_TO_FT
-                    delta_1000ms = struct.unpack('>h', delta_1000ms_bytes)[0] / 10.0 * M_TO_FT
-                    delta_timestamp = (time_stamp_hundreths - timestamp_offset_hundreths) / 100.0
-                    
-                    if altitude < 1000:
-                        temp_vario_records.append(VarioRecord(delta_timestamp, altitude, delta_1000ms))
-                else:
-                    f.read(15)
-                vario_packet_count += 1
-            else:
-                f.read(15)
-    
-    # Second pass to capture altitude data
-    session_number = -1
-    while True:
-        timestamp = process_header_packets(file_obj)
-        if timestamp is None:
-            break
-        quit_program = capture_altitude_data(file_obj)
-        if quit_program:
-            break
-    
-    # Third pass: Mark thermal start/end points based on actual thermal records
-    for session in sessions:
-        session_thermals = [t for t in thermal_records if t['session_number'] == session['session_number']]
-        
-        # Create sets of start and end timestamps for this session's thermals
-        thermal_start_times = set(thermal['start_time'] for thermal in session_thermals)
-        thermal_end_times = set(thermal['end_time'] for thermal in session_thermals)
-        
-        # Mark only the points that are part of actual caught thermals
-        for point in session['altitude_data']:
-            point['thermal_start'] = point['timestamp'] in thermal_start_times
-            point['thermal_end'] = point['timestamp'] in thermal_end_times
-    
+
     return {
         'sessions': sessions,
         'total_thermals': sum(s['thermal_count'] for s in sessions)

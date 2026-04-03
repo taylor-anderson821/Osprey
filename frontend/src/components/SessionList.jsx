@@ -1,12 +1,19 @@
 import { useState, useMemo } from 'react';
-import { Calendar, Clock, LineChart, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { Calendar, Clock, LineChart, ChevronUp, ChevronDown, Trash2, MapPin } from 'lucide-react';
 import { formatSessionListDate } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel } from '../utils/units';
+import LocationEditModal from './LocationEditModal';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export default function SessionList({ sessions, onSessionClick, initialSelectedDate = 'all', onSessionDeleted }) {
+  const [editingSession, setEditingSession] = useState(null);
   
+  const handleEditLocation = (e, session) => {
+    e.stopPropagation(); // Prevent row click
+    setEditingSession(session);
+  };
+
   const handleDelete = async (e, sessionId) => {
     e.stopPropagation(); // Prevent row click
     
@@ -273,6 +280,7 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
                 </div>
               </th>
               <th className="text-center py-2 px-4 text-sm font-semibold text-gray-300">Chart</th>
+              <th className="text-center py-2 px-4 text-sm font-semibold text-gray-300">Location</th>
               <th className="text-center py-2 px-4 text-sm font-semibold text-gray-300">Delete</th>
             </tr>
           </thead>
@@ -314,6 +322,15 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
                 </td>
                 <td className="py-2 px-4 text-center">
                   <button
+                    onClick={(e) => handleEditLocation(e, session)}
+                    className="text-blue-400 hover:text-blue-300 transition"
+                    title="Set location"
+                  >
+                    <MapPin size={18} />
+                  </button>
+                </td>
+                <td className="py-2 px-4 text-center">
+                  <button
                     onClick={(e) => handleDelete(e, session.id)}
                     className="text-red-400 hover:text-red-300 transition"
                     title="Delete session"
@@ -326,6 +343,18 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
           </tbody>
         </table>
       </div>
+
+      {/* Location Edit Modal */}
+      {editingSession && (
+        <LocationEditModal
+          session={editingSession}
+          onClose={() => setEditingSession(null)}
+          onUpdate={() => {
+            setEditingSession(null);
+            onSessionDeleted && onSessionDeleted(); // Refresh sessions
+          }}
+        />
+      )}
     </div>
   );
 }

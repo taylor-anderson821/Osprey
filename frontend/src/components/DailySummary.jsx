@@ -174,7 +174,7 @@ export default function DailySummary({ onDateClick }) {
                 formatter={(value) => value.toLocaleString()}
               />
               <Legend />
-              <Bar dataKey="gain" fill="#10b981" name={`Thermal Gain (${unitLabel})`} />
+              <Bar dataKey="gain" fill="#ef4444" name={`Thermal Gain (${unitLabel})`} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -201,14 +201,14 @@ export default function DailySummary({ onDateClick }) {
                   style: { textAnchor: 'middle' },
                   offset: -20
                 }}
-                domain={[0, 100]}
+                domain={[0, 50]}
               />
               <Tooltip 
                 contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff' }}
                 formatter={(value) => `${value}%`}
               />
               <Legend />
-              <Bar dataKey="percentage" fill="#f59e0b" name="Thermal Duration %" />
+              <Bar dataKey="percentage" fill="#3b82f6" name="Thermal Duration %" />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -1,6 +1,6 @@
-import { ArrowLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Scatter, ComposedChart, ReferenceArea } from 'recharts';
+import { Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, ReferenceArea } from 'recharts';
 import { formatSessionDetailDate } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel } from '../utils/units';
 
@@ -63,6 +63,20 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
     }
   };
 
+  const handlePreviousSession = () => {
+    if (session.sessionIndex > 0) {
+      const prevSession = sessions[session.sessionIndex - 1];
+      onSessionChange(prevSession.id, session.sessionIndex - 1);
+    }
+  };
+
+  const handleNextSession = () => {
+    if (session.sessionIndex < sessions.length - 1) {
+      const nextSession = sessions[session.sessionIndex + 1];
+      onSessionChange(nextSession.id, session.sessionIndex + 1);
+    }
+  };
+
   const formatDuration = (seconds) => {
     if (seconds < 60) {
       return `${Math.floor(seconds)}s`;
@@ -95,39 +109,24 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
     climb_rate: point.climb_rate
   }));
 
-  // Extract thermal start and end points from ThermalRecord data (convert to user's units)
-  const thermalStarts = session.thermals.map(thermal => ({
-    timestamp: thermal.start_time,
-    altitude: formatAltitudeValue(thermal.start_altitude)
-  }));
-
-  const thermalEnds = session.thermals.map(thermal => ({
-    timestamp: thermal.end_time,
-    altitude: formatAltitudeValue(thermal.end_altitude)
-  }));
+  // Build sets of thermal start/end timestamps for fast lookup
+  const thermalStartTimes = new Set(session.thermals.map(t => t.start_time));
+  const thermalEndTimes = new Set(session.thermals.map(t => t.end_time));
 
   // Create a custom dot renderer that shows thermal markers
+  // Match by timestamp only (within 0.6s tolerance to handle float precision between passes)
   const renderCustomDot = (props) => {
     const { cx, cy, payload } = props;
     
-    // Check if this point is a thermal start
-    const isThermalStart = thermalStarts.some(
-      t => Math.abs(t.timestamp - payload.timestamp) < 0.5 && Math.abs(t.altitude - payload.altitude) < 1
-    );
-    
-    // Check if this point is a thermal end
-    const isThermalEnd = thermalEnds.some(
-      t => Math.abs(t.timestamp - payload.timestamp) < 0.5 && Math.abs(t.altitude - payload.altitude) < 1
-    );
+    const isThermalStart = [...thermalStartTimes].some(t => Math.abs(t - payload.timestamp) < 0.6);
+    const isThermalEnd = [...thermalEndTimes].some(t => Math.abs(t - payload.timestamp) < 0.6);
     
     if (isThermalStart) {
       return <circle cx={cx} cy={cy} r={6} fill="#10b981" stroke="none" />;
     }
-    
     if (isThermalEnd) {
       return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
     }
-    
     return null;
   };
 
@@ -142,6 +141,33 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
   const ticks = [];
   for (let t = startTick; t <= maxTime; t += tickInterval) {
     ticks.push(t);
+  }
+
+  // Calculate Y-axis tick marks with round numbers
+  const minAltitude = Math.min(...chartData.map(d => d.altitude));
+  const maxAltitude = Math.max(...chartData.map(d => d.altitude));
+  const altitudeRange = maxAltitude - minAltitude;
+  
+  // Determine appropriate tick interval based on range
+  let yTickInterval;
+  if (altitudeRange <= 100) {
+    yTickInterval = 25;
+  } else if (altitudeRange <= 500) {
+    yTickInterval = 50;
+  } else if (altitudeRange <= 1000) {
+    yTickInterval = 100;
+  } else if (altitudeRange <= 2500) {
+    yTickInterval = 250;
+  } else {
+    yTickInterval = 500;
+  }
+  
+  // Generate Y-axis ticks
+  const minYTick = Math.floor(minAltitude / yTickInterval) * yTickInterval;
+  const maxYTick = Math.ceil(maxAltitude / yTickInterval) * yTickInterval;
+  const yTicks = [];
+  for (let y = minYTick; y <= maxYTick; y += yTickInterval) {
+    yTicks.push(y);
   }
 
   // Format time as m:ss or h:mm:ss
@@ -162,62 +188,76 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
 
   return (
     <div>
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-blue-400 hover:text-blue-300 mb-6"
-      >
-        <ArrowLeft size={20} />
-        Back to Sessions
-      </button>
-
       <div className="bg-gray-800 rounded-lg shadow-md p-6 mb-6 border border-gray-700">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <select
-                value={currentDate}
-                onChange={(e) => handleDateChange(e.target.value)}
-                className="bg-gray-700 text-gray-400 border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-left"
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-1">
+            <select
+              value={currentDate}
+              onChange={(e) => handleDateChange(e.target.value)}
+              className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 text-left"
+            >
+              {uniqueDates.map((date) => (
+                <option key={date} value={date}>
+                  {date}
+                </option>
+              ))}
+            </select>
+            
+            {/* Session Navigation */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={handlePreviousSession}
+                disabled={session.sessionIndex === 0}
+                className="p-1 text-white hover:text-blue-400 disabled:text-gray-500 disabled:cursor-not-allowed"
+                title="Previous session"
               >
-                {uniqueDates.map((date) => (
-                  <option key={date} value={date}>
-                    {date}
-                  </option>
-                ))}
-              </select>
+                <ChevronLeft size={20} />
+              </button>
+              
+              {sessionsOnCurrentDate && sessionsOnCurrentDate.length > 1 && (
+                <select
+                  value={session.sessionIndex}
+                  onChange={(e) => {
+                    const index = parseInt(e.target.value);
+                    const selectedSession = sessions[index];
+                    if (selectedSession) {
+                      onSessionChange(selectedSession.id, index);
+                    }
+                  }}
+                  className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                >
+                  {sessionsOnCurrentDate.map((sess, dayIndex) => {
+                    const sessIndex = sessions.findIndex(s => s.id === sess.id);
+                    return (
+                      <option key={sessIndex} value={sessIndex}>
+                        Session {dayIndex + 1}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+              
+              <button
+                onClick={handleNextSession}
+                disabled={session.sessionIndex === sessions.length - 1}
+                className="p-1 text-white hover:text-blue-400 disabled:text-gray-500 disabled:cursor-not-allowed"
+                title="Next session"
+              >
+                <ChevronRight size={20} />
+              </button>
             </div>
-            <p className="text-2xl font-bold text-white">
-              Session {session.sessionIndex !== undefined ? session.sessionIndex + 1 : ''} <span className="text-sm text-gray-400 font-normal">{new Date(session.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-            </p>
+            
+            <span className="text-sm text-white font-normal ml-2">
+              {new Date(session.start_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </span>
           </div>
-
-          <div>
-          {sessionsOnCurrentDate && sessionsOnCurrentDate.length > 1 && (
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-400">Jump to:</label>
-              <select
-                value={session.sessionIndex}
-                onChange={(e) => {
-                  const index = parseInt(e.target.value);
-                  const selectedSession = sessions[index];
-                  if (selectedSession) {
-                    onSessionChange(selectedSession.id, index);
-                  }
-                }}
-                className="bg-gray-700 text-white border border-gray-600 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-              >
-                {sessionsOnCurrentDate.map((sess, dayIndex) => {
-                  const sessIndex = sessions.findIndex(s => s.id === sess.id);
-                  return (
-                    <option key={sessIndex} value={sessIndex}>
-                      Session {dayIndex + 1}
-                    </option>
-                  );
-                })}
-              </select>
+          
+          {/* Aircraft Model - if available */}
+          {session.aircraft_model && (
+            <div className="text-2xl font-bold text-white">
+              {session.aircraft_model}
             </div>
           )}
-          </div>
         </div>
 
         {/* Metrics row - 56.25% width (75% of 75%) to align with chart */}
@@ -254,9 +294,9 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          {/* Chart - takes 4/5 width on large screens */}
-          <div className="lg:col-span-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          {/* Chart - takes 9/12 width on large screens */}
+          <div className="lg:col-span-9">
             <ResponsiveContainer width="100%" height={450}>
               <ComposedChart 
                 data={chartData} 
@@ -269,14 +309,18 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                   domain={[minTime, maxTime]}
                   ticks={ticks}
                   tickFormatter={formatTimeAxis}
-                  label={{ value: timeRange >= 3600 ? 'time (h:mm:ss)' : 'time (m:ss)', position: 'insideBottom', offset: -5 }}
-                  tick={{ fontSize: 11 }}
+                  label={{ value: timeRange >= 3600 ? 'time (h:mm:ss)' : 'time (m:ss)', position: 'insideBottom', offset: -5, style: { fill: 'white' } }}
+                  tick={{ fontSize: 11, fill: 'white' }}
                   allowDataOverflow={true}
                   scale="linear"
+                  stroke="white"
                 />
                 <YAxis 
-                  label={{ value: `Altitude (${unitLabel})`, angle: -90, position: 'insideLeft' }}
-                  tick={{ fontSize: 11 }}
+                  label={{ value: `Altitude (${unitLabel})`, angle: -90, position: 'insideLeft', style: { fill: 'white' } }}
+                  tick={{ fontSize: 11, fill: 'white' }}
+                  ticks={yTicks}
+                  domain={[minYTick, maxYTick]}
+                  stroke="white"
                 />
                 <Tooltip 
                   content={<CustomTooltip unitLabel={unitLabel} />}
@@ -296,7 +340,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                   ]}
                 />
                 <Line 
-                  type="linear" 
+                  type="linear"
                   dataKey="altitude" 
                   stroke="#3b82f6" 
                   strokeWidth={1.5}
@@ -319,8 +363,8 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
             </ResponsiveContainer>
           </div>
 
-          {/* Thermal Summary - takes 1/5 width on large screens */}
-          <div className="lg:col-span-1">
+          {/* Thermal Summary - takes 3/12 width on large screens */}
+          <div className="lg:col-span-3">
             <h3 className="text-lg font-semibold mb-4 text-white">Thermals</h3>
               
               {session.thermals.length === 0 ? (
@@ -335,6 +379,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                       <th className="text-right py-1 px-1 font-semibold text-gray-300">End ({unitLabel})</th>
                       <th className="text-right py-1 px-1 font-semibold text-gray-300">Gain ({unitLabel})</th>
                       <th className="text-right py-1 px-1 font-semibold text-gray-300">Duration</th>
+                      <th className="text-right py-1 px-1 font-semibold text-gray-300">Avg. Clmb Rt</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -352,6 +397,9 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                           +{Math.round(formatAltitudeValue(thermal.altitude_gain))}
                         </td>
                         <td className="py-1 px-1 text-gray-300 text-right">{formatDuration(thermal.duration)}</td>
+                        <td className="py-1 px-1 text-gray-300 text-right">
+                          {thermal.duration > 0 ? (formatAltitudeValue(thermal.altitude_gain) / thermal.duration).toFixed(1) : '0.0'}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
