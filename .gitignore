@@ -29,8 +29,8 @@ frontend/package-lock.json
 *.log
 startup.log
 
-# Misc docs generated during development
-LOCATION_FEATURE_IMPLEMENTATION.md
+# Archive folder
+archive/
 ROUTER_UPDATE.md
 SETUP_LOCATION_FEATURE.md
 DEPLOYMENT_SUMMARY.md
