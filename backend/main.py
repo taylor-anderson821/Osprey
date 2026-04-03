@@ -141,7 +141,9 @@ def get_session_detail(
     db: Session = Depends(get_db)
 ):
     """Get detailed session data including altitude chart and thermals"""
+    from sqlalchemy.orm import joinedload
     session = db.query(models.FlightSession)\
+        .options(joinedload(models.FlightSession.location))\
         .filter(models.FlightSession.id == session_id)\
         .filter(models.FlightSession.user_id == user_id)\
         .first()
@@ -155,7 +157,8 @@ def get_session_detail(
     
     return {
         **session.__dict__,
-        "thermals": thermals
+        "thermals": thermals,
+        "location": session.location
     }
 
 @app.get("/api/daily-summary", response_model=List[schemas.DailySummary])

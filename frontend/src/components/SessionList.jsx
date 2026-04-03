@@ -95,7 +95,7 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
       });
     }
 
-    // Apply column sorting if a column is selected
+    // Apply column sorting if a column is selected, otherwise strict reverse chronological
     if (sortColumn) {
       filtered.sort((a, b) => {
         let aVal, bVal;
@@ -140,24 +140,9 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
         const comparison = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
         return sortDirection === 'asc' ? comparison : -comparison;
       });
-    } else if (selectedDate === 'all') {
-      // Default sorting: If "All Dates" is selected and no column sort, sort by date (reverse chronological) then by time (chronological within each day)
-      filtered.sort((a, b) => {
-        const dateA = new Date(a.start_time);
-        const dateB = new Date(b.start_time);
-        
-        // Get date strings without time
-        const dayA = new Date(dateA.getFullYear(), dateA.getMonth(), dateA.getDate()).getTime();
-        const dayB = new Date(dateB.getFullYear(), dateB.getMonth(), dateB.getDate()).getTime();
-        
-        // If different days, sort by day (newest first)
-        if (dayA !== dayB) {
-          return dayB - dayA;
-        }
-        
-        // Same day, sort by time (earliest first)
-        return dateA.getTime() - dateB.getTime();
-      });
+    } else {
+      // Default: strict reverse chronological (newest first, always)
+      filtered.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
     }
 
     return filtered;

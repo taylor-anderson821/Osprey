@@ -1,6 +1,6 @@
 # Osprey Flight Analytics
 
-Osprey is a web-based soaring analytics platform for RC sailplanes and gliders. It processes vario telemetry from Spektrum receivers to help you understand your thermalling performance and track your progression over time.
+Osprey is a soaring analytics webapp for RC sailplanes and gliders. It processes vario telemetry from Spektrum receivers to help you understand your thermalling performance and progression over time.
 
 ![Session Detail](images/session-detail.png)
 
@@ -60,7 +60,13 @@ Caught thermals are identified by working backwards from each thermal peak to fi
 
 4. Open [http://localhost:5173](http://localhost:5173) in your browser.
 
-### Uploading Data
+## Setting Up Your Transmitter to Capture Telemetry
+
+In your Spektrum transmitter's Telemetry view, go to **File Settings** and configure:
+- A file name for the TLM output
+- A trigger switch to start/stop recording (e.g. throttle cut switch)
+
+### Uploading Data to Osprey
 
 1. After flying, copy the `.TLM` file from your Spektrum transmitter's memory card to your computer.
 2. In Osprey, navigate to **Upload** and select the TLM file.
@@ -68,27 +74,16 @@ Caught thermals are identified by working backwards from each thermal peak to fi
 
 > **Tip:** Delete the TLM file from your memory card after each upload to avoid duplicate sessions on the next upload.
 
-## Setting Up Your Transmitter
-
-In your Spektrum transmitter's Telemetry view, go to **File Settings** and configure:
-- A file name for the TLM output
-- A trigger switch to start/stop recording (e.g. throttle cut switch)
-
 ## Screenshots
 
-**Session Altitude Chart with Thermal Annotations**
-![Session Profile](images/session-profile.png)
+![Session Profile](images/pilot-profile.png)
 
-**Session Summary Table**
-![Session Summary](images/session-summary.png)
+![Session Summary](images/daily-summary.png)
 
-**Thermal Summary Table**
-![Thermal Summary](images/thermal-summary.png)
+![Thermal Summary](images/session-list.png)
 
-**Daily Soaring Log**
-<img src="images/daily-session-log.png" width="70%">
 
 ## Notes
 
-- Osprey was developed using telemetry from electric gliders. DLG glider data should also work but hasn't been fully tested.
-- If you encounter issues with a specific TLM file, open an Issue and attach the file.
+- Osprey was developed using telemetry from electric gliders. DLG glider data should also work, however I haven't tested the thermal detection algorithm on DLG data.
+- Please let me know if you think it is worthwhile for this to be hosted.

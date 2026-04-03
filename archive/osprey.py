@@ -2,7 +2,7 @@ ALTITUDE_MOVING_AVG_WINDOW = 5  # Number of previous samples to include in altit
 THERMAL_CANDIDATE_WINDOW = 30 # the number of points to look forward or back for thermal peak candidate 
 THERMAL_MIN_PEAK_ALTITUDE_FT = 100 # minimum altitude of a thermal peak to be considered
 THERMAL_MINIMUM_GAIN_FT = 25 #minimum altitude gain before recognizing a thermal
-THERMAL_MAX_CLIMB_RATE_FPS = 9 # maximum thermal climb rate (ft/s) to consider for thermal peak candidates (filters out launches)
+THERMAL_MAX_CLIMB_RATE_FPS = 5 # maximum thermal climb rate (ft/s) to consider for thermal peak candidates (filters out launches)
 THERMAL_MAX_CLIMB_RATE_LOOKBACK = 5 #number of seconds to look back to check for high climb rate before thermal peak (all samples in seconds)
 LAUNCH_MIN_CLIMB_RATE_FPS = 21 # minimum launch climb rate (ft/s) to consider for launch peak candidates
 LAUNCH_MIN_CLIMB_RATE_LOOKBACK = 5 #number of seconds to look back to check for high climb rate before launch peak (all samples in seconds)
@@ -542,9 +542,9 @@ def process_payload_packet(f, wb, thermal_records, session_records, quitProgram)
 
         # If EOF reached, run analytics for final session, update Session and Thermals worksheets, save XLS and quit
         if len(time_stamp_hundreths_bytes) < 4: 
-            smooth_altitude_readings(vario_records)
-            identify_thermal_peaks(vario_records, session_records, process_payload_packet.session_number)
+            smooth_altitude_readings(vario_records) ### put launch peak check before therm peak
             identify_launch_peaks(vario_records, session_records, process_payload_packet.session_number)
+            identify_thermal_peaks(vario_records, session_records, process_payload_packet.session_number)
             identify_trough_bottoms(vario_records, process_payload_packet.session_number)
             identify_caught_thermals(vario_records, session_records, process_payload_packet.session_number, thermal_records, wb)
             add_line_chart_to_ws(ws)
@@ -605,8 +605,8 @@ def process_payload_packet(f, wb, thermal_records, session_records, quitProgram)
         # Process this session
         if (time_stamp_hundreths == 0xFFFFFFFF and len(vario_records) > 0): #process  data if we just processed a vario block
             smooth_altitude_readings(vario_records)
-            identify_thermal_peaks(vario_records, session_records, process_payload_packet.session_number)
             identify_launch_peaks(vario_records, session_records, process_payload_packet.session_number)
+            identify_thermal_peaks(vario_records, session_records, process_payload_packet.session_number)
             identify_trough_bottoms(vario_records, process_payload_packet.session_number)
             identify_caught_thermals(vario_records, session_records, process_payload_packet.session_number, thermal_records, wb)
             add_line_chart_to_ws(ws)

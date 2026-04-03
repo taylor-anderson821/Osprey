@@ -19,6 +19,24 @@ class ThermalResponse(ThermalBase):
     class Config:
         from_attributes = True
 
+class FlyingLocationBase(BaseModel):
+    name: str
+    country: Optional[str] = None
+    latitude: float
+    longitude: float
+
+class FlyingLocationCreate(FlyingLocationBase):
+    pass
+
+class FlyingLocationResponse(FlyingLocationBase):
+    id: int
+    approved: bool
+    created_at: datetime
+    submitted_by: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
 class SessionSummary(BaseModel):
     id: int
     start_time: datetime
@@ -29,6 +47,7 @@ class SessionSummary(BaseModel):
     total_thermal_duration: float
     thermal_launch_ratio: float
     aircraft_model: Optional[str] = None
+    location: Optional[FlyingLocationResponse] = None
     
     class Config:
         from_attributes = True
@@ -53,24 +72,6 @@ class DailySummary(BaseModel):
     total_thermal_duration: float
     session_duration: float
     thermal_launch_ratio: float
-
-class FlyingLocationBase(BaseModel):
-    name: str
-    country: Optional[str] = None
-    latitude: float
-    longitude: float
-
-class FlyingLocationCreate(FlyingLocationBase):
-    pass
-
-class FlyingLocationResponse(FlyingLocationBase):
-    id: int
-    approved: bool
-    created_at: datetime
-    submitted_by: Optional[str] = None
-    
-    class Config:
-        from_attributes = True
 
 class UserProfileUpdate(BaseModel):
     first_name: Optional[str] = None

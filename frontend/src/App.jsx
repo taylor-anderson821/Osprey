@@ -72,12 +72,12 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-gray-900">
       <header className="bg-gray-800 text-white shadow-lg border-b border-gray-700">
-        <div className="container mx-auto px-4 py-6">
+        <div className="container mx-auto px-4 py-2">
           <div className="flex items-center gap-4">
             <img 
-              src="/logo.svg" 
+              src="/osprey-logo.png" 
               alt="Osprey Logo" 
-              className="h-12 w-12 object-contain"
+              className="h-36 w-36 object-contain"
             />
             <div>
               <h1 className="text-3xl font-bold flex items-center gap-2">

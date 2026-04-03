@@ -258,6 +258,12 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
               {session.aircraft_model}
             </div>
           )}
+          {/* Flying Location - if available */}
+          {session.location && (
+            <div className="text-sm text-gray-400 mt-1">
+              {session.location.name}
+            </div>
+          )}
         </div>
 
         {/* Metrics row - 56.25% width (75% of 75%) to align with chart */}
