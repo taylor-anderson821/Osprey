@@ -1,6 +1,6 @@
 # Osprey Flight Analytics
 
-Osprey is a web app that generates soaring analytics for RC sailplanes. It analyzes altitude and variometer telemetry from [Spektrum receivers](https://www.spektrumrc.com/aircraft-receivers/) to track thermalling performance and progression over time.
+Osprey is a web app that generates soaring analytics for RC sailplanes. It analyzes altitude and variometer telemetry data from [Spektrum receivers](https://www.spektrumrc.com/aircraft-receivers/) to track thermalling performance and progression over time.
 
 ![Session Detail](images/session-detail.png)
 
@@ -8,14 +8,14 @@ Osprey is a web app that generates soaring analytics for RC sailplanes. It analy
 
 - **Session Charts** — Altitude profiles with thermal start/end markers for every flying session
 - **Thermal Detection** — Automatically identifies thermals, launches, and troughs from variometer data
-- **Daily Summary** — Bar charts showing thermal gain and thermal duration percentage by day
+- **Daily Summary** — Bar charts showing thermal gain and duration by day
 - **Soaring Log** — Lifetime totals for flight time, thermal gain, and thermal duration
-- **Session & Thermal Maximums** — Personal records with one-click navigation to the session
-- **Imperial / Metric** — Toggle between ft and m in Settings
+- **Session & Thermal Maximums** — Personal records with one-click navigation to session details
+- **Imperial / Metric** — Toggle between ft and m in **Settings**
 
 ## How It Works
 
-Osprey parses `.TLM` files from Spektrum receivers. It downsamples altitude and variometer data at 1-second intervals and applies a moving average to smooth the altitude trace. It then identifies:
+Osprey parses `.TLM` files from Spektrum receivers. It downsamples altitude and variometer data at 1 Hz and applies a moving average to smooth the altitude data. It then identifies:
 
 - **Thermal peaks** — local altitude maxima above a minimum height threshold
 - **Launch peaks** — points associated with high climb rates (motor launches)
@@ -61,17 +61,15 @@ Caught thermals are identified by working backwards from each thermal peak to fi
 
 ## Setting Up Your Transmitter to Capture Telemetry
 
-In your Spektrum transmitter's Telemetry view, go to **File Settings** and configure:
+In your Spektrum transmitter's **Telemetry** view, go to **File Settings** and configure:
 - A file name for the TLM output
 - A trigger switch to start/stop recording (e.g. a throttle cut switch)
 
 ### Uploading Data to Osprey
 
 1. After flying, copy the `.TLM` file from your Spektrum transmitter's memory card to your computer.
-2. In Osprey, navigate to **Upload** and select the TLM file.
+2. In Osprey, navigate to **Upload** and select the TLM file.  You can also find sample TLM files under `/sample data`.
 3. Osprey processes the file and adds all sessions to the database.
-
-> **Tip:** Delete the TLM file from your memory card after each upload to avoid duplicate sessions on the next upload.
 
 ## Screenshots
 
