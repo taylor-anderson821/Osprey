@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Upload, BarChart3, TrendingUp, Settings as SettingsIcon, Calendar, User, Shield } from 'lucide-react';
+import { Upload, BarChart3, Settings as SettingsIcon, Calendar, User, Shield } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import SessionList from './components/SessionList';
 import SessionDetail from './components/SessionDetail';
@@ -72,19 +72,17 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-gray-900">
       <header className="bg-gray-800 text-white shadow-lg border-b border-gray-700">
-        <div className="container mx-auto px-4 py-2">
+        <div className="container mx-auto px-4 py-0">
           <div className="flex items-center gap-4">
             <img 
               src="/osprey-logo.png" 
               alt="Osprey Logo" 
-              className="h-36 w-36 object-contain"
+              className="h-16 w-auto object-contain"
             />
             <div>
-              <h1 className="text-3xl font-bold flex items-center gap-2">
-                <TrendingUp size={32} />
-                Osprey Flight Analytics
+              <h1 className="text-3xl font-bold">
+                Osprey Soaring Analytics
               </h1>
-              <p className="text-gray-400 mt-1">RC Soaring Performance Tracking</p>
             </div>
           </div>
         </div>

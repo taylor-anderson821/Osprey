@@ -152,7 +152,7 @@ export default function Profile() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div>
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Profile Header - Left Column */}
         <div className="lg:col-span-1">
