@@ -48,6 +48,10 @@ class SessionSummary(BaseModel):
     thermal_launch_ratio: float
     aircraft_model: Optional[str] = None
     location: Optional[FlyingLocationResponse] = None
+    weather_temperature_f: Optional[float] = None
+    weather_wind_speed_mph: Optional[float] = None
+    weather_wind_direction: Optional[str] = None
+    weather_conditions: Optional[str] = None
     
     class Config:
         from_attributes = True

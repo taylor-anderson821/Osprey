@@ -264,6 +264,16 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
               {session.location.name}
             </div>
           )}
+          {/* Weather - if available */}
+          {session.weather_temperature_f != null && (
+            <div className="flex items-center gap-4 mt-1 text-sm text-gray-300">
+              {session.weather_conditions && <span>{session.weather_conditions}</span>}
+              <span>{session.weather_temperature_f}°F</span>
+              {session.weather_wind_speed_mph != null && (
+                <span>Wind {session.weather_wind_direction} {session.weather_wind_speed_mph} mph</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Metrics row - 56.25% width (75% of 75%) to align with chart */}

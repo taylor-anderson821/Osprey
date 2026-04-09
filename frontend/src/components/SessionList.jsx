@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Calendar, Clock, LineChart, ChevronUp, ChevronDown, Trash2, MapPin } from 'lucide-react';
+import { Calendar, Clock, LineChart, ChevronUp, ChevronDown, Trash2, MapPin, ArrowUp } from 'lucide-react';
 import { formatSessionListDate } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel } from '../utils/units';
 import LocationEditModal from './LocationEditModal';
@@ -49,6 +49,13 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
       setSortColumn(column);
       setSortDirection('asc');
     }
+  };
+
+  const windDirectionDegrees = {
+    'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5,
+    'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5,
+    'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
+    'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5,
   };
 
   const formatDuration = (seconds) => {
@@ -124,6 +131,10 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
           case 'gain':
             aVal = a.total_thermal_gain;
             bVal = b.total_thermal_gain;
+            break;
+          case 'windSpeed':
+            aVal = a.weather_wind_speed_mph ?? -1;
+            bVal = b.weather_wind_speed_mph ?? -1;
             break;
           case 'thermalDuration':
             aVal = a.total_thermal_duration;
@@ -264,6 +275,18 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
                   )}
                 </div>
               </th>
+              <th 
+                className="text-right py-2 px-4 text-sm font-semibold text-gray-300 cursor-pointer hover:text-white"
+                onClick={() => handleSort('windSpeed')}
+              >
+                <div className="flex items-center justify-end gap-1">
+                  Wind
+                  {sortColumn === 'windSpeed' && (
+                    sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                  )}
+                </div>
+              </th>
+              <th className="text-center py-2 px-4 text-sm font-semibold text-gray-300">Dir</th>
               <th className="text-center py-2 px-4 text-sm font-semibold text-gray-300">Chart</th>
               <th className="text-center py-2 px-4 text-sm font-semibold text-gray-300">Location</th>
               <th className="text-center py-2 px-4 text-sm font-semibold text-gray-300">Delete</th>
@@ -301,6 +324,19 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
                   {session.duration_seconds > 0 
                     ? ((session.total_thermal_duration / session.duration_seconds) * 100).toFixed(1)
                     : '0.0'}%
+                </td>
+                <td className="py-2 px-4 text-right text-white">
+                  {session.weather_wind_speed_mph != null ? `${session.weather_wind_speed_mph} mph` : '—'}
+                </td>
+                <td className="py-2 px-4 text-center text-white">
+                  {session.weather_wind_direction != null
+                    ? <ArrowUp
+                        size={18}
+                        className="inline text-blue-300"
+                        style={{ transform: `rotate(${(windDirectionDegrees[session.weather_wind_direction] ?? 0) + 180}deg)` }}
+                        title={session.weather_wind_direction}
+                      />
+                    : '—'}
                 </td>
                 <td className="py-2 px-4 text-center">
                   <LineChart size={18} className="text-blue-400 inline" />

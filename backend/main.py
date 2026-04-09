@@ -2,8 +2,9 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import io
-from typing import List
-from datetime import datetime
+import httpx
+from typing import List, Optional
+from datetime import datetime, timezone
 
 import models
 import schemas
@@ -14,15 +15,93 @@ app = FastAPI(title="Osprey Flight Analytics API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+
+# WMO weather code to description mapping (subset)
+WMO_CODES = {
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Foggy", 48: "Icy fog", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+    61: "Light rain", 63: "Rain", 65: "Heavy rain", 71: "Light snow", 73: "Snow", 75: "Heavy snow",
+    80: "Rain showers", 81: "Rain showers", 82: "Heavy rain showers",
+    95: "Thunderstorm", 96: "Thunderstorm w/ hail", 99: "Thunderstorm w/ heavy hail",
+}
+
+def degrees_to_cardinal(deg):
+    if deg is None:
+        return None
+    dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"]
+    return dirs[round(deg / 22.5) % 16]
+
+def fetch_weather_for_session(lat: float, lon: float, session_time: datetime) -> Optional[dict]:
+    """Fetch historical weather from Open-Meteo for a given location and time."""
+    try:
+        if session_time.tzinfo is None:
+            session_time = session_time.replace(tzinfo=timezone.utc)
+
+        date_str = session_time.strftime('%Y-%m-%d')
+        url = "https://archive-api.open-meteo.com/v1/archive"
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "start_date": date_str,
+            "end_date": date_str,
+            "hourly": "temperature_2m,windspeed_10m,winddirection_10m,weathercode",
+            "temperature_unit": "fahrenheit",
+            "windspeed_unit": "mph",
+            "timezone": "UTC",
+        }
+        response = httpx.get(url, params=params, timeout=8.0)
+        if response.status_code != 200:
+            return None
+
+        hourly = response.json().get("hourly", {})
+        times = hourly.get("time", [])
+        if not times:
+            return None
+
+        # Find the hour closest to session_time
+        session_hour = session_time.replace(minute=0, second=0, microsecond=0)
+        target = session_hour.strftime('%Y-%m-%dT%H:00')
+        idx = times.index(target) if target in times else 0
+
+        temp = hourly.get("temperature_2m", [])[idx]
+        wind_speed = hourly.get("windspeed_10m", [])[idx]
+        wind_dir = hourly.get("winddirection_10m", [])[idx]
+        wcode = hourly.get("weathercode", [])[idx]
+
+        return {
+            "temperature_f": round(temp, 1) if temp is not None else None,
+            "wind_speed_mph": round(wind_speed, 1) if wind_speed is not None else None,
+            "wind_direction": degrees_to_cardinal(wind_dir),
+            "conditions": WMO_CODES.get(wcode, f"Code {wcode}") if wcode is not None else None,
+        }
+    except Exception as e:
+        print(f"[WEATHER] Exception: {e}")
+        return None
+
 # Database tables are managed by Alembic migrations
 # Run: alembic upgrade head
 # models.Base.metadata.create_all(bind=database.engine)
+
+def store_weather_on_session(db_session):
+    """Fetch weather and store it on the session if location is set."""
+    if db_session.location and not db_session.weather_temperature_f:
+        weather = fetch_weather_for_session(
+            db_session.location.latitude,
+            db_session.location.longitude,
+            db_session.start_time
+        )
+        if weather:
+            db_session.weather_temperature_f = weather.get("temperature_f")
+            db_session.weather_wind_speed_mph = weather.get("wind_speed_mph")
+            db_session.weather_wind_direction = weather.get("wind_direction")
+            db_session.weather_conditions = weather.get("conditions")
 
 def get_db():
     db = database.SessionLocal()
@@ -158,8 +237,30 @@ def get_session_detail(
     return {
         **session.__dict__,
         "thermals": thermals,
-        "location": session.location
+        "location": session.location,
     }
+
+@app.post("/api/backfill-weather")
+def backfill_weather(
+    user_id: str = "demo_user",
+    db: Session = Depends(get_db)
+):
+    """Fetch and store weather for all sessions that don't have it yet."""
+    from sqlalchemy.orm import joinedload
+    sessions = db.query(models.FlightSession)\
+        .options(joinedload(models.FlightSession.location))\
+        .filter(models.FlightSession.user_id == user_id)\
+        .filter(models.FlightSession.weather_temperature_f == None)\
+        .all()
+    
+    updated = 0
+    for session in sessions:
+        store_weather_on_session(session)
+        if session.weather_temperature_f is not None:
+            updated += 1
+            db.commit()
+    
+    return {"message": f"Updated weather for {updated} of {len(sessions)} sessions"}
 
 @app.get("/api/daily-summary", response_model=List[schemas.DailySummary])
 def get_daily_summary(
