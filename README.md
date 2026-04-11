@@ -8,6 +8,8 @@ Osprey is a web app that generates soaring analytics for RC sailplanes. It analy
 
 - **Session Charts** — Altitude profiles with thermal start/end markers for every flying session
 - **Thermal Detection** — Automatically identifies thermals, launches, and troughs from variometer data
+- **Session Charts** — Altitude profiles with thermal start/end markers for every flying session
+- **Weather Snapshot** — Weather conditions based on soaring location and session start time"
 - **Daily Summary** — Bar charts showing thermal gain and duration by day
 - **Soaring Log** — Lifetime totals for flight time, thermal gain, and thermal duration
 - **Session & Thermal Maximums** — Personal records with one-click navigation to session details
