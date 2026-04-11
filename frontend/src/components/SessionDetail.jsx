@@ -1,8 +1,9 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MoveUp } from 'lucide-react';
 import { useState } from 'react';
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, ReferenceArea } from 'recharts';
 import { formatSessionDetailDate } from '../utils/dateFormatter';
-import { formatAltitudeValue, getUnitLabel } from '../utils/units';
+import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
+import { WeatherIcon } from '../utils/weatherIcon';
 
 const CustomTooltip = ({ active, payload, label, unitLabel }) => {
   if (active && payload && payload.length) {
@@ -267,10 +268,20 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
           {/* Weather - if available */}
           {session.weather_temperature_f != null && (
             <div className="flex items-center gap-4 mt-1 text-sm text-gray-300">
-              {session.weather_conditions && <span>{session.weather_conditions}</span>}
-              <span>{session.weather_temperature_f}°F</span>
+              {session.weather_conditions && <WeatherIcon condition={session.weather_conditions} />}
+              <span>{convertTemperature(session.weather_temperature_f)}{getTempLabel()}</span>
               {session.weather_wind_speed_mph != null && (
-                <span>Wind {session.weather_wind_direction} {session.weather_wind_speed_mph} mph</span>
+                <span className="flex items-center gap-1">
+                  Wind {convertWindSpeed(session.weather_wind_speed_mph)} {getWindSpeedLabel()}
+                  {session.weather_wind_direction && (
+                    <MoveUp
+                      size={14}
+                      className="text-blue-300"
+                      style={{ transform: `rotate(${({'N':0,'NNE':22.5,'NE':45,'ENE':67.5,'E':90,'ESE':112.5,'SE':135,'SSE':157.5,'S':180,'SSW':202.5,'SW':225,'WSW':247.5,'W':270,'WNW':292.5,'NW':315,'NNW':337.5}[session.weather_wind_direction] ?? 0) + 180}deg)` }}
+                      title={session.weather_wind_direction}
+                    />
+                  )}
+                </span>
               )}
             </div>
           )}

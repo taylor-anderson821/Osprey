@@ -76,6 +76,10 @@ class DailySummary(BaseModel):
     total_thermal_duration: float
     session_duration: float
     thermal_launch_ratio: float
+    weather_temperature_f: Optional[float] = None
+    weather_wind_speed_mph: Optional[float] = None
+    weather_wind_direction: Optional[str] = None
+    weather_conditions: Optional[str] = None
 
 class UserProfileUpdate(BaseModel):
     first_name: Optional[str] = None
@@ -116,6 +120,5 @@ class Token(BaseModel):
 class PasswordReset(BaseModel):
     email: str
 
-class PasswordResetConfirm(BaseModel):
-    token: str
-    new_password: str
+class BulkDeleteRequest(BaseModel):
+    session_ids: List[int]

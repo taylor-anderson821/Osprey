@@ -36,17 +36,12 @@ export default function LocationEditModal({ session, onClose, onUpdate }) {
 
     setSaving(true);
     try {
-      const response = await fetch(
-        `${API_URL}/api/sessions/${session.id}/location?location_id=${selectedLocation}`,
-        { method: 'PUT' }
-      );
-
-      if (response.ok) {
-        onUpdate();
-        onClose();
-      } else {
-        alert('Failed to update location');
-      }
+      const ids = session.bulkIds ?? [session.id];
+      await Promise.all(ids.map(id =>
+        fetch(`${API_URL}/api/sessions/${id}/location?location_id=${selectedLocation}`, { method: 'PUT' })
+      ));
+      onUpdate();
+      onClose();
     } catch (error) {
       console.error('Error updating location:', error);
       alert('Error updating location');
@@ -73,7 +68,9 @@ export default function LocationEditModal({ session, onClose, onUpdate }) {
 
         <div className="mb-4">
           <p className="text-gray-400 text-sm mb-2">
-            Session: {new Date(session.start_time).toLocaleString()}
+            {session.bulkIds
+              ? `${session.bulkIds.length} sessions selected`
+              : `Session: ${new Date(session.start_time).toLocaleString()}`}
           </p>
         </div>
 

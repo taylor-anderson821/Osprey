@@ -268,10 +268,9 @@ def get_daily_summary(
     db: Session = Depends(get_db)
 ):
     """Get daily aggregated statistics"""
-    # Aggregate sessions by date
     from sqlalchemy import func
     from datetime import date
-    
+
     results = db.query(
         func.date(models.FlightSession.start_time).label('date'),
         func.count(models.FlightSession.id).label('session_count'),
@@ -284,7 +283,23 @@ def get_daily_summary(
      .group_by(func.date(models.FlightSession.start_time))\
      .order_by(func.date(models.FlightSession.start_time).desc())\
      .all()
-    
+
+    # For each day, find the midpoint session's weather
+    daily_weather = {}
+    for r in results:
+        sessions_that_day = db.query(models.FlightSession)\
+            .filter(models.FlightSession.user_id == user_id)\
+            .filter(func.date(models.FlightSession.start_time) == r.date)\
+            .order_by(models.FlightSession.start_time)\
+            .all()
+        mid = sessions_that_day[len(sessions_that_day) // 2] if sessions_that_day else None
+        daily_weather[str(r.date)] = {
+            "weather_temperature_f": mid.weather_temperature_f if mid else None,
+            "weather_wind_speed_mph": mid.weather_wind_speed_mph if mid else None,
+            "weather_wind_direction": mid.weather_wind_direction if mid else None,
+            "weather_conditions": mid.weather_conditions if mid else None,
+        }
+
     return [
         {
             "date": r.date,
@@ -294,10 +309,29 @@ def get_daily_summary(
             "total_thermal_gain": r.total_gain or 0,
             "total_thermal_duration": r.thermal_duration or 0,
             "session_duration": r.session_duration or 0,
-            "thermal_launch_ratio": r.thermals / r.launches if r.launches else 0
+            "thermal_launch_ratio": r.thermals / r.launches if r.launches else 0,
+            **daily_weather.get(str(r.date), {})
         }
         for r in results
     ]
+
+@app.delete("/api/sessions/bulk")
+def delete_bulk_sessions(
+    payload: schemas.BulkDeleteRequest,
+    user_id: str = "demo_user",
+    db: Session = Depends(get_db)
+):
+    """Delete multiple sessions by ID"""
+    session_ids = payload.session_ids
+    db.query(models.Thermal)\
+        .filter(models.Thermal.session_id.in_(session_ids))\
+        .delete(synchronize_session=False)
+    deleted = db.query(models.FlightSession)\
+        .filter(models.FlightSession.id.in_(session_ids))\
+        .filter(models.FlightSession.user_id == user_id)\
+        .delete(synchronize_session=False)
+    db.commit()
+    return {"message": f"Deleted {deleted} sessions"}
 
 @app.delete("/api/sessions/{session_id}")
 def delete_session(
