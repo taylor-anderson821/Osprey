@@ -11,6 +11,7 @@ export default function DailySummary({ onDateClick }) {
   const [loading, setLoading] = useState(true);
   const [sortCol, setSortCol] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
+  const [hoveredDate, setHoveredDate] = useState(null);
   const unitLabel = getUnitLabel();
   const tempLabel = getTempLabel();
   const windLabel = getWindSpeedLabel();
@@ -176,7 +177,7 @@ export default function DailySummary({ onDateClick }) {
                   return (
                     <tr 
                       key={index} 
-                      className="border-b border-gray-700 hover:bg-gray-700 cursor-pointer transition"
+                      className={`border-b border-gray-700 cursor-pointer transition ${formatDate(day.date) === hoveredDate ? 'bg-blue-900' : 'hover:bg-gray-700'}`}
                       onClick={() => onDateClick && onDateClick(fullDate)}
                     >
                       <td className="py-2 px-2 text-gray-300 whitespace-nowrap">{formatDate(day.date)}</td>
@@ -220,7 +221,9 @@ export default function DailySummary({ onDateClick }) {
         <div className="bg-gray-800 rounded-lg shadow-md p-4 border border-gray-700 flex-1">
           <h3 className="text-base font-semibold mb-2 text-white">Thermal Gain</h3>
           <ResponsiveContainer width="100%" height="90%">
-            <BarChart data={chartData} margin={{ left: 40 }}>
+            <BarChart data={chartData} margin={{ left: 40 }}
+              onMouseMove={(e) => e.activeLabel && setHoveredDate(e.activeLabel)}
+              onMouseLeave={() => setHoveredDate(null)}>
               <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" />
               <XAxis dataKey="date" stroke="#9ca3af" />
               <YAxis 
@@ -256,7 +259,9 @@ export default function DailySummary({ onDateClick }) {
                 ? ((dailyData.find(day => formatDate(day.date) === d.date)?.total_thermal_duration / 
                     dailyData.find(day => formatDate(day.date) === d.date)?.session_duration) * 100).toFixed(1)
                 : 0
-            }))} margin={{ left: 40 }}>
+            }))} margin={{ left: 40 }}
+              onMouseMove={(e) => e.activeLabel && setHoveredDate(e.activeLabel)}
+              onMouseLeave={() => setHoveredDate(null)}>
               <CartesianGrid strokeDasharray="3 3" stroke="#4b5563" />
               <XAxis dataKey="date" stroke="#9ca3af" />
               <YAxis 
