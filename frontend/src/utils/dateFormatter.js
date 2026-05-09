@@ -1,24 +1,18 @@
-/**
- * Format date for session list (short format)
- */
-export const formatSessionListDate = (dateString) => {
-  return new Date(dateString).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
+const DATE_SHORT_OPTS = { month: '2-digit', day: '2-digit', year: '2-digit' };
 
-/**
- * Format date for session detail (long format)
- */
-export const formatSessionDetailDate = (dateString) => {
-  return new Date(dateString).toLocaleString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
+export const formatDateShort = (dateString) =>
+  new Date(dateString).toLocaleDateString('en-US', DATE_SHORT_OPTS);
+
+export const formatSessionListDate = (dateString) =>
+  new Date(dateString).toLocaleString('en-US', {
+    ...DATE_SHORT_OPTS,
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
-};
+
+export const formatSessionDetailDate = (dateString) =>
+  new Date(dateString).toLocaleString('en-US', {
+    ...DATE_SHORT_OPTS,
+    hour: '2-digit',
+    minute: '2-digit',
+  });

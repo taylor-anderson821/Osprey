@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Upload, BarChart3, Settings as SettingsIcon, Calendar, User, Shield } from 'lucide-react';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useLocation, Navigate } from 'react-router-dom';
+import { Upload, BarChart3, Settings as SettingsIcon, Calendar, User, Shield, LogOut } from 'lucide-react';
 import FileUpload from './components/FileUpload';
 import SessionList from './components/SessionList';
 import SessionDetail from './components/SessionDetail';
@@ -8,53 +8,47 @@ import DailySummary from './components/DailySummary';
 import Settings from './components/Settings';
 import Profile from './components/Profile';
 import Admin from './components/Admin';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import Login from './components/Login';
+import Register from './components/Register';
+import ProtectedRoute from './components/ProtectedRoute';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { apiFetch, API_URL } from './utils/api';
 
 function AppContent() {
   const [sessions, setSessions] = useState([]);
   const [selectedDate, setSelectedDate] = useState('all');
-  const [userProfile, setUserProfile] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { user, logout } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const navigate = useNavigate();
   const location = useLocation();
 
   const fetchSessions = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/sessions`);
-      const data = await response.json();
-      setSessions(data);
+      const response = await apiFetch('/api/sessions');
+      if (response.ok) {
+        const data = await response.json();
+        setSessions(data);
+      }
     } catch (error) {
       console.error('Error fetching sessions:', error);
     }
   };
 
-  const fetchUserProfile = async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/profile`);
-      const data = await response.json();
-      setUserProfile(data);
-      setIsAdmin(data.role === 'admin');
-    } catch (error) {
-      console.error('Error fetching user profile:', error);
-    }
-  };
-
   useEffect(() => {
-    fetchSessions();
-    fetchUserProfile();
-  }, []);
+    if (user) {
+      fetchSessions();
+    }
+  }, [user]);
 
   const handleUploadSuccess = () => {
     fetchSessions();
     navigate('/sessions');
   };
 
-  const handleSessionClick = (sessionId, sessionIndex) => {
+  const handleSessionClick = (sessionId) => {
     navigate(`/sessions/${sessionId}`);
   };
 
-  // Determine active tab from current route
   const getActiveTab = () => {
     const path = location.pathname;
     if (path.startsWith('/sessions/')) return 'detail';
@@ -73,91 +67,103 @@ function AppContent() {
     <div className="min-h-screen bg-gray-900">
       <header className="bg-gray-800 text-white shadow-lg border-b border-gray-700">
         <div className="container mx-auto px-4 py-0">
-          <div className="flex items-center gap-4">
-            <img 
-              src="/osprey-logo.png" 
-              alt="Osprey Logo" 
-              className="h-16 w-auto object-contain"
-            />
-            <div>
-              <h1 className="text-3xl font-bold">
-                Osprey Soaring Analytics
-              </h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <img
+                src="/osprey-logo.png"
+                alt="Osprey Logo"
+                className="h-10 sm:h-16 w-auto object-contain"
+              />
+              <div>
+                <h1 className="text-xl sm:text-3xl font-bold">
+                  <span className="sm:hidden">Osprey</span>
+                  <span className="hidden sm:inline">Osprey Soaring Analytics</span>
+                </h1>
+              </div>
             </div>
+            {user && (
+              <button
+                onClick={() => { logout(); navigate('/login'); }}
+                className="flex items-center gap-2 text-gray-400 hover:text-white transition text-sm"
+              >
+                <LogOut size={16} />
+                Sign out
+              </button>
+            )}
           </div>
         </div>
       </header>
 
       <nav className="bg-gray-800 border-b border-gray-700">
-        <div className="container mx-auto px-4">
-          <div className="flex gap-4">
+        <div className="container mx-auto px-4 overflow-x-auto">
+          <div className="flex gap-1 sm:gap-4 whitespace-nowrap">
             <Link
               to="/profile"
-              className={`px-4 py-3 font-medium border-b-2 transition ${
+              className={`px-3 sm:px-4 py-3 font-medium border-b-2 transition flex items-center gap-1 flex-shrink-0 ${
                 activeTab === 'profile'
                   ? 'border-blue-500 text-blue-400'
                   : 'border-transparent text-gray-400 hover:text-gray-200'
               }`}
             >
-              <User className="inline mr-2" size={18} />
-              Profile
+              <User size={18} />
+              <span className="hidden sm:inline">Profile</span>
             </Link>
             <Link
               to="/daily"
-              className={`px-4 py-3 font-medium border-b-2 transition ${
+              className={`px-3 sm:px-4 py-3 font-medium border-b-2 transition flex items-center gap-1 flex-shrink-0 ${
                 activeTab === 'daily'
                   ? 'border-blue-500 text-blue-400'
                   : 'border-transparent text-gray-400 hover:text-gray-200'
               }`}
             >
-              <Calendar className="inline mr-2" size={18} />
-              Daily Summary
+              <Calendar size={18} />
+              <span className="hidden sm:inline">Daily Summary</span>
             </Link>
             <Link
               to="/sessions"
-              className={`px-4 py-3 font-medium border-b-2 transition ${
+              className={`px-3 sm:px-4 py-3 font-medium border-b-2 transition flex items-center gap-1 flex-shrink-0 ${
                 activeTab === 'sessions' || activeTab === 'detail'
                   ? 'border-blue-500 text-blue-400'
                   : 'border-transparent text-gray-400 hover:text-gray-200'
               }`}
             >
-              <BarChart3 className="inline mr-2" size={18} />
-              Sessions
+              <BarChart3 size={18} />
+              <span className="hidden sm:inline">Sessions</span>
             </Link>
             {isAdmin && (
               <Link
                 to="/admin"
-                className={`px-4 py-3 font-medium border-b-2 transition ${
+                className={`px-3 sm:px-4 py-3 font-medium border-b-2 transition flex items-center gap-1 flex-shrink-0 ${
                   activeTab === 'admin'
                     ? 'border-blue-500 text-blue-400'
                     : 'border-transparent text-gray-400 hover:text-gray-200'
                 }`}
               >
-                <Shield className="inline mr-2" size={18} />
-                Admin
+                <Shield size={18} />
+                <span className="hidden sm:inline">Admin</span>
               </Link>
             )}
             <Link
               to="/upload"
-              className={`px-4 py-3 font-medium border-b-2 transition ${
+              className={`px-3 sm:px-4 py-3 font-medium border-b-2 transition flex items-center gap-1 flex-shrink-0 ${
                 activeTab === 'upload'
                   ? 'border-blue-500 text-blue-400'
                   : 'border-transparent text-gray-400 hover:text-gray-200'
               }`}
             >
-              <Upload className="inline mr-2" size={18} />
-              Upload
+              <Upload size={18} />
+              <span className="hidden sm:inline">Upload</span>
             </Link>
             <Link
               to="/settings"
-              className={`px-4 py-3 font-medium border-b-2 transition ${
+              className={`px-3 sm:px-4 py-3 font-medium border-b-2 transition flex items-center gap-1 flex-shrink-0 ${
                 activeTab === 'settings'
                   ? 'border-blue-500 text-blue-400'
                   : 'border-transparent text-gray-400 hover:text-gray-200'
               }`}
             >
-              <SettingsIcon className="inline mr-2" size={18} />
-              Settings
+              <SettingsIcon size={18} />
+              <span className="hidden sm:inline">Settings</span>
             </Link>
           </div>
         </div>
@@ -165,7 +171,7 @@ function AppContent() {
 
       <main className="container mx-auto px-4 py-8">
         <Routes>
-          <Route path="/" element={<Profile />} />
+          <Route path="/" element={<Navigate to="/profile" replace />} />
           <Route path="/sessions" element={<SessionList sessions={sessions} onSessionClick={handleSessionClick} initialSelectedDate={selectedDate} onSessionDeleted={fetchSessions} />} />
           <Route path="/sessions/:sessionId" element={<SessionDetailWrapper sessions={sessions} onSessionChange={handleSessionClick} />} />
           <Route path="/daily" element={<DailySummary onDateClick={(date) => { setSelectedDate(date); navigate('/sessions'); }} />} />
@@ -189,10 +195,12 @@ function SessionDetailWrapper({ sessions, onSessionChange }) {
     const fetchSession = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${API_URL}/api/sessions/${sessionId}`);
-        const data = await response.json();
-        const sessionIndex = sessions.findIndex(s => s.id === parseInt(sessionId));
-        setSession({ ...data, sessionIndex });
+        const response = await apiFetch(`/api/sessions/${sessionId}`);
+        if (response.ok) {
+          const data = await response.json();
+          const sessionIndex = sessions.findIndex(s => s.id === parseInt(sessionId));
+          setSession({ ...data, sessionIndex });
+        }
       } catch (error) {
         console.error('Error fetching session detail:', error);
       } finally {
@@ -212,8 +220,8 @@ function SessionDetailWrapper({ sessions, onSessionChange }) {
   }
 
   return (
-    <SessionDetail 
-      session={session} 
+    <SessionDetail
+      session={session}
       sessions={sessions}
       onBack={() => navigate('/sessions')}
       onSessionChange={onSessionChange}
@@ -224,7 +232,20 @@ function SessionDetailWrapper({ sessions, onSessionChange }) {
 function App() {
   return (
     <Router>
-      <AppContent />
+      <AuthProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/*"
+            element={
+              <ProtectedRoute>
+                <AppContent />
+              </ProtectedRoute>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </Router>
   );
 }

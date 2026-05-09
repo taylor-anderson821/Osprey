@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, TrendingUp, Clock, Plane } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../utils/api';
 
 export default function Profile() {
   const [profile, setProfile] = useState(null);
@@ -10,6 +9,8 @@ export default function Profile() {
   const [dailySummary, setDailySummary] = useState([]);
   const [loading, setLoading] = useState(true);
   const [units, setUnits] = useState('imperial');
+  const [activePanel, setActivePanel] = useState(0);
+  const carouselRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export default function Profile() {
 
   const fetchProfile = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/profile`);
+      const response = await apiFetch('/api/profile');
       const data = await response.json();
       setProfile(data);
     } catch (error) {
@@ -33,7 +34,7 @@ export default function Profile() {
 
   const fetchSessions = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/sessions-with-thermals`);
+      const response = await apiFetch('/api/sessions-with-thermals');
       const data = await response.json();
       setSessions(data);
     } catch (error) {
@@ -45,7 +46,7 @@ export default function Profile() {
 
   const fetchDailySummary = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/daily-summary`);
+      const response = await apiFetch('/api/daily-summary');
       const data = await response.json();
       setDailySummary(data);
     } catch (error) {
@@ -147,64 +148,218 @@ export default function Profile() {
   const maxThermalGainThermal = allThermals.find(t => t.altitude_gain === maxSingleThermalGain);
   const maxClimbRateThermal = allThermals.find(t => t.avg_climb_rate === maxAvgClimbRate);
 
+  const handleCarouselScroll = () => {
+    if (!carouselRef.current) return;
+    const { scrollLeft, clientWidth } = carouselRef.current;
+    setActivePanel(Math.round(scrollLeft / clientWidth));
+  };
+
+  const scrollToPanel = (index) => {
+    if (!carouselRef.current) return;
+    carouselRef.current.scrollTo({ left: index * carouselRef.current.clientWidth, behavior: 'smooth' });
+  };
+
+  const panelLabels = ['Soaring History', 'Session Records', 'Thermal Records'];
+
   if (loading) {
     return <div className="text-center py-12">Loading...</div>;
   }
 
-  return (
-    <div>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Profile Header - Left Column */}
-        <div className="lg:col-span-1">
-          <div className="bg-gray-800 rounded-lg shadow-md p-6 border border-gray-700 h-full">
-            <div className="flex flex-col items-center">
-              {profile?.photo_url ? (
-                <img
-                  src={profile.photo_url}
-                  alt="Profile"
-                  className="w-32 h-32 rounded-full object-cover border-4 border-gray-600 mb-4"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <div className="w-32 h-32 rounded-full bg-gray-700 flex items-center justify-center border-4 border-gray-600 mb-4">
-                  <User size={64} className="text-gray-400" />
-                </div>
-              )}
-              
-              <h2 className="text-2xl font-bold text-white mb-3 text-center">
-                {profile?.first_name && profile?.last_name
-                  ? `${profile.first_name} ${profile.last_name}`
-                  : profile?.email || 'User Profile'}
-              </h2>
-              
-              <div className="space-y-2 text-gray-300 w-full">
-                <p className="text-sm">
-                  <span className="text-gray-400">Email:</span> {profile?.email}
-                </p>
-                {profile?.home_location && (
-                  <p className="text-sm">
-                    <span className="text-gray-400">Home Location:</span> {profile.home_location.name}
-                  </p>
-                )}
-                <p className="text-sm text-gray-400">
-                  Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'N/A'}
-                </p>
-              </div>
+  const ProfileHeader = () => (
+    <div className="bg-gray-800 rounded-lg shadow-md p-6 border border-gray-700 h-full">
+      <div className="flex flex-col items-center">
+        {profile?.photo_url ? (
+          <img
+            src={profile.photo_url}
+            alt="Profile"
+            className="w-32 h-32 rounded-full object-cover border-4 border-gray-600 mb-4"
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        ) : (
+          <div className="w-32 h-32 rounded-full bg-gray-700 flex items-center justify-center border-4 border-gray-600 mb-4">
+            <User size={64} className="text-gray-400" />
+          </div>
+        )}
+        <h2 className="text-xl lg:text-2xl font-bold text-white mb-3 text-center">
+          {profile?.first_name && profile?.last_name
+            ? `${profile.first_name} ${profile.last_name}`
+            : profile?.email || 'User Profile'}
+        </h2>
+        <div className="space-y-2 text-gray-300 w-full">
+          <p className="text-sm"><span className="text-gray-400">Email:</span> {profile?.email}</p>
+          {profile?.home_location && (
+            <p className="text-sm"><span className="text-gray-400">Home Location:</span> {profile.home_location.name}</p>
+          )}
+          <p className="text-sm text-gray-400">
+            Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) : 'N/A'}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const SoaringHistoryPanel = () => (
+    <div className="bg-gray-800 rounded-lg shadow-md p-6 border border-gray-700 h-full">
+      <h3 className="text-base font-semibold text-white mb-4">Soaring History</h3>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-medium text-gray-400">Flying Days</h4>
+            <Plane size={18} className="text-blue-400" />
+          </div>
+          <p className="text-lg font-bold text-white">{flyingDays}</p>
+        </div>
+        <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-medium text-gray-400">Flight Duration</h4>
+            <Clock size={18} className="text-green-400" />
+          </div>
+          <p className="text-lg font-bold text-white">{formatTotalDuration(totalFlightTime)}</p>
+        </div>
+        <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-medium text-gray-400">Thermal Gain</h4>
+            <TrendingUp size={18} className="text-purple-400" />
+          </div>
+          <p className="text-lg font-bold text-white">{formatThermalGain(totalThermalGain)}</p>
+        </div>
+        <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-medium text-gray-400">Thermal Duration</h4>
+            <Clock size={18} className="text-orange-400" />
+          </div>
+          <p className="text-lg font-bold text-white">{formatTotalDuration(totalThermalDuration)}</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const SessionRecordsPanel = () => (
+    <div className="bg-gray-800 rounded-lg shadow-md p-6 border border-gray-700 h-full">
+      <h3 className="text-base font-semibold text-white mb-4">Session Records</h3>
+      {sessions.length === 0 ? (
+        <p className="text-gray-500">No sessions yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          <div
+            className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
+            onClick={() => maxFlightTimeSession && navigate(`/sessions/${maxFlightTimeSession.id}`)}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-400">Flight Time</h4>
+              <Clock size={18} className="text-green-400" />
             </div>
+            <p className="text-lg font-bold text-white">{formatDuration(maxFlightTime)}</p>
+          </div>
+          <div
+            className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
+            onClick={() => maxThermalGainSession && navigate(`/sessions/${maxThermalGainSession.id}`)}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-400">Thermal Gain</h4>
+              <TrendingUp size={18} className="text-purple-400" />
+            </div>
+            <p className="text-lg font-bold text-white">{formatThermalGain(maxThermalGain)}</p>
+          </div>
+          <div
+            className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
+            onClick={() => maxThermalDurationSession && navigate(`/sessions/${maxThermalDurationSession.id}`)}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-400">Thermal Duration</h4>
+              <Clock size={18} className="text-orange-400" />
+            </div>
+            <p className="text-lg font-bold text-white">{formatDuration(maxThermalDuration)}</p>
           </div>
         </div>
+      )}
+    </div>
+  );
 
-        {/* Soaring Log - Right Columns */}
-        <div className="lg:col-span-3">
+  const ThermalRecordsPanel = () => (
+    <div className="bg-gray-800 rounded-lg shadow-md p-6 border border-gray-700 h-full">
+      <h3 className="text-base font-semibold text-white mb-4">Thermal Records</h3>
+      {allThermals.length === 0 ? (
+        <p className="text-gray-500">No thermal data yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          <div
+            className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
+            onClick={() => maxThermalDurationThermal && navigate(`/sessions/${maxThermalDurationThermal.session_id}`)}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-400">Thermal Duration</h4>
+              <Clock size={18} className="text-orange-400" />
+            </div>
+            <p className="text-lg font-bold text-white">{formatDuration(maxSingleThermalDuration)}</p>
+          </div>
+          <div
+            className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
+            onClick={() => maxThermalGainThermal && navigate(`/sessions/${maxThermalGainThermal.session_id}`)}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-400">Thermal Gain</h4>
+              <TrendingUp size={18} className="text-purple-400" />
+            </div>
+            <p className="text-lg font-bold text-white">{formatThermalGain(maxSingleThermalGain)}</p>
+          </div>
+          <div
+            className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
+            onClick={() => maxClimbRateThermal && navigate(`/sessions/${maxClimbRateThermal.session_id}`)}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs font-medium text-gray-400">Avg Climb Rate</h4>
+              <TrendingUp size={18} className="text-blue-400" />
+            </div>
+            <p className="text-lg font-bold text-white">{formatClimbRate(maxAvgClimbRate)}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div>
+      {/* Mobile: profile header + swipeable carousel */}
+      <div className="lg:hidden">
+        <ProfileHeader />
+        <div className="mt-4">
+          <div
+            ref={carouselRef}
+            onScroll={handleCarouselScroll}
+            className="flex overflow-x-auto snap-x snap-mandatory"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {[<SoaringHistoryPanel key="history" />, <SessionRecordsPanel key="session" />, <ThermalRecordsPanel key="thermal" />].map((panel, i) => (
+              <div key={i} className="w-full flex-shrink-0 snap-start">
+                {panel}
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-col items-center mt-3 gap-1">
+            <div className="flex gap-2">
+              {[0, 1, 2].map(i => (
+                <button
+                  key={i}
+                  onClick={() => scrollToPanel(i)}
+                  className={`rounded-full transition-all ${activePanel === i ? 'w-4 h-2 bg-blue-400' : 'w-2 h-2 bg-gray-500'}`}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-gray-500">{panelLabels[activePanel]}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop: original side-by-side layout */}
+      <div className="hidden lg:grid grid-cols-4 gap-6">
+        <div className="col-span-1">
+          <ProfileHeader />
+        </div>
+        <div className="col-span-3">
           <div className="bg-gray-800 rounded-lg shadow-md p-6 border border-gray-700 h-full">
-            <h3 className="text-xl font-semibold text-white mb-4">
-              Soaring History
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Flying Days */}
+            <h3 className="text-xl font-semibold text-white mb-4">Soaring History</h3>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-medium text-gray-400">Flying Days</h4>
@@ -212,8 +367,6 @@ export default function Profile() {
                 </div>
                 <p className="text-2xl font-bold text-white">{flyingDays}</p>
               </div>
-
-              {/* Total Flight Duration */}
               <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-medium text-gray-400">Flight Duration</h4>
@@ -221,19 +374,13 @@ export default function Profile() {
                 </div>
                 <p className="text-2xl font-bold text-white">{formatTotalDuration(totalFlightTime)}</p>
               </div>
-
-              {/* Total Thermal Gain */}
               <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-medium text-gray-400">Thermal Gain</h4>
                   <TrendingUp size={18} className="text-purple-400" />
                 </div>
-                <p className="text-2xl font-bold text-white">
-                  {formatThermalGain(totalThermalGain)}
-                </p>
+                <p className="text-2xl font-bold text-white">{formatThermalGain(totalThermalGain)}</p>
               </div>
-
-              {/* Total Thermal Duration */}
               <div className="bg-gray-750 rounded-lg p-4 border border-gray-600">
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="text-xs font-medium text-gray-400">Thermal Duration</h4>
@@ -242,8 +389,6 @@ export default function Profile() {
                 <p className="text-2xl font-bold text-white">{formatTotalDuration(totalThermalDuration)}</p>
               </div>
             </div>
-
-            {/* Session Maximums */}
             {sessions.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-700">
                 <h4 className="text-xl font-semibold text-white mb-3">Session Records</h4>
@@ -256,9 +401,7 @@ export default function Profile() {
                       <h4 className="text-xs font-medium text-gray-400">Flight Time</h4>
                       <Clock size={18} className="text-green-400" />
                     </div>
-                    <p className="text-2xl font-bold text-white">
-                      {formatDuration(maxFlightTime)}
-                    </p>
+                    <p className="text-2xl font-bold text-white">{formatDuration(maxFlightTime)}</p>
                   </div>
                   <div
                     className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
@@ -268,9 +411,7 @@ export default function Profile() {
                       <h4 className="text-xs font-medium text-gray-400">Thermal Gain</h4>
                       <TrendingUp size={18} className="text-purple-400" />
                     </div>
-                    <p className="text-2xl font-bold text-white">
-                      {formatThermalGain(maxThermalGain)}
-                    </p>
+                    <p className="text-2xl font-bold text-white">{formatThermalGain(maxThermalGain)}</p>
                   </div>
                   <div
                     className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
@@ -280,15 +421,11 @@ export default function Profile() {
                       <h4 className="text-xs font-medium text-gray-400">Thermal Duration</h4>
                       <Clock size={18} className="text-orange-400" />
                     </div>
-                    <p className="text-2xl font-bold text-white">
-                      {formatDuration(maxThermalDuration)}
-                    </p>
+                    <p className="text-2xl font-bold text-white">{formatDuration(maxThermalDuration)}</p>
                   </div>
                 </div>
               </div>
             )}
-
-            {/* Thermal Maximums */}
             {allThermals.length > 0 && (
               <div className="mt-4 pt-4 border-t border-gray-700">
                 <h4 className="text-xl font-semibold text-white mb-3">Thermal Records</h4>
@@ -301,9 +438,7 @@ export default function Profile() {
                       <h4 className="text-xs font-medium text-gray-400">Thermal Duration</h4>
                       <Clock size={18} className="text-orange-400" />
                     </div>
-                    <p className="text-2xl font-bold text-white">
-                      {formatDuration(maxSingleThermalDuration)}
-                    </p>
+                    <p className="text-2xl font-bold text-white">{formatDuration(maxSingleThermalDuration)}</p>
                   </div>
                   <div
                     className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
@@ -313,9 +448,7 @@ export default function Profile() {
                       <h4 className="text-xs font-medium text-gray-400">Thermal Gain</h4>
                       <TrendingUp size={18} className="text-purple-400" />
                     </div>
-                    <p className="text-2xl font-bold text-white">
-                      {formatThermalGain(maxSingleThermalGain)}
-                    </p>
+                    <p className="text-2xl font-bold text-white">{formatThermalGain(maxSingleThermalGain)}</p>
                   </div>
                   <div
                     className="bg-gray-750 rounded-lg p-4 border border-gray-600 cursor-pointer hover:border-blue-500 hover:bg-gray-700 transition"
@@ -325,9 +458,7 @@ export default function Profile() {
                       <h4 className="text-xs font-medium text-gray-400">Avg Climb Rate</h4>
                       <TrendingUp size={18} className="text-blue-400" />
                     </div>
-                    <p className="text-2xl font-bold text-white">
-                      {formatClimbRate(maxAvgClimbRate)}
-                    </p>
+                    <p className="text-2xl font-bold text-white">{formatClimbRate(maxAvgClimbRate)}</p>
                   </div>
                 </div>
               </div>

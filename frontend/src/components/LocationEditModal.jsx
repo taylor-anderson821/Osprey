@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, MapPin } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../utils/api';
 
 export default function LocationEditModal({ session, onClose, onUpdate }) {
   const [locations, setLocations] = useState([]);
@@ -15,7 +14,7 @@ export default function LocationEditModal({ session, onClose, onUpdate }) {
 
   const fetchLocations = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/locations?approved_only=true`);
+      const response = await apiFetch('/api/locations?approved_only=true');
       const data = await response.json();
       setLocations(data);
       if (session.location_id) {
@@ -38,7 +37,7 @@ export default function LocationEditModal({ session, onClose, onUpdate }) {
     try {
       const ids = session.bulkIds ?? [session.id];
       await Promise.all(ids.map(id =>
-        fetch(`${API_URL}/api/sessions/${id}/location?location_id=${selectedLocation}`, { method: 'PUT' })
+        apiFetch(`/api/sessions/${id}/location?location_id=${selectedLocation}`, { method: 'PUT' })
       ));
       onUpdate();
       onClose();

@@ -1,11 +1,10 @@
 import { useState, useMemo } from 'react';
 import { ChevronUp, ChevronDown, Trash2, MapPin, MoveUp } from 'lucide-react';
-import { formatSessionListDate } from '../utils/dateFormatter';
+import { formatDateShort } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
 import LocationEditModal from './LocationEditModal';
 import { WeatherIcon } from '../utils/weatherIcon';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../utils/api';
 
 export default function SessionList({ sessions, onSessionClick, initialSelectedDate = 'all', onSessionDeleted }) {
   const [editingSession, setEditingSession] = useState(null);
@@ -52,14 +51,11 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
   const handleBulkDelete = async () => {
     if (!confirm(`Delete ${selectedIds.size} session(s)?`)) return;
     try {
-      const response = await fetch(
-        `${API_URL}/api/sessions/bulk?user_id=demo_user`,
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_ids: [...selectedIds] }),
-        }
-      );
+      const response = await apiFetch('/api/sessions/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_ids: [...selectedIds] }),
+      });
       if (response.ok) {
         setSelectedIds(new Set());
         onSessionDeleted && onSessionDeleted();
@@ -82,7 +78,7 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
     e.stopPropagation();
     if (!confirm('Are you sure you want to delete this session?')) return;
     try {
-      const response = await fetch(`${API_URL}/api/sessions/${sessionId}`, { method: 'DELETE' });
+      const response = await apiFetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
       if (response.ok) {
         onSessionDeleted && onSessionDeleted();
       } else {
@@ -96,16 +92,32 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
 
   const availableDates = useMemo(() => {
     const dates = sessions.map(s =>
-      new Date(s.start_time).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+      new Date(s.start_time).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })
     );
     return ['all', ...new Set(dates)];
   }, [sessions]);
 
+  const sessionDayNumbers = useMemo(() => {
+    const byDate = {};
+    sessions.forEach(s => {
+      const date = new Date(s.start_time).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+      if (!byDate[date]) byDate[date] = [];
+      byDate[date].push(s);
+    });
+    const numbers = {};
+    Object.values(byDate).forEach(daySessions => {
+      daySessions.sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+      daySessions.forEach((s, i) => { numbers[s.id] = `S${i + 1}`; });
+    });
+    return numbers;
+  }, [sessions]);
+
   const filteredSessions = useMemo(() => {
-    let filtered = selectedDate === 'all'
+    const effectiveDate = availableDates.includes(selectedDate) ? selectedDate : 'all';
+    let filtered = effectiveDate === 'all'
       ? [...sessions]
       : sessions.filter(s =>
-          new Date(s.start_time).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) === selectedDate
+          new Date(s.start_time).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) === effectiveDate
         );
 
     if (sortColumn) {
@@ -135,11 +147,11 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
       filtered.sort((a, b) => new Date(b.start_time) - new Date(a.start_time));
     }
     return filtered;
-  }, [sessions, selectedDate, sortColumn, sortDirection]);
+  }, [sessions, availableDates, selectedDate, sortColumn, sortDirection]);
 
-  const SortTh = ({ col, align = 'left', width = '', children }) => (
+  const SortTh = ({ col, align = 'left', width = '', className = '', children }) => (
     <th
-      className={`text-${align} py-1.5 px-2 text-sm font-semibold text-gray-300 cursor-pointer hover:text-white ${width}`}
+      className={`text-${align} py-1.5 px-2 text-sm font-semibold text-gray-300 cursor-pointer hover:text-white ${width} ${className}`}
       onClick={() => handleSort(col)}
     >
       <div className={`flex items-center ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : ''} gap-1`}>
@@ -163,7 +175,7 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
     <div>
       <div className="mb-4 flex items-center gap-3">
         <select
-          value={selectedDate}
+          value={availableDates.includes(selectedDate) ? selectedDate : 'all'}
           onChange={(e) => setSelectedDate(e.target.value)}
           className="bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
@@ -193,7 +205,8 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
         )}
       </div>
 
-      <div className="bg-gray-800 rounded-lg shadow overflow-hidden border border-gray-700 inline-block">
+      <div className="overflow-x-auto w-full">
+      <div className="bg-gray-800 rounded-lg shadow overflow-hidden border border-gray-700 inline-block min-w-full">
         <table className="text-sm">
           <thead className="bg-gray-900 border-b border-gray-700">
             <tr>
@@ -203,13 +216,13 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
               <SortTh col="launches" align="center">Launches</SortTh>
               <SortTh col="thermals" align="center">Thermals</SortTh>
               <SortTh col="gain" align="right" width="w-16">Thermal Gain</SortTh>
-              <SortTh col="thermalDuration" align="right" width="w-16">Thermal Duration</SortTh>
-              <SortTh col="thermalDurationPct" align="right" width="w-16">Thermal Duration (%)</SortTh>
-              <th className="text-center py-1.5 pl-6 pr-2 text-sm font-semibold text-gray-300">Wx</th>
-              <SortTh col="temp" align="right" width="pl-6">Temp</SortTh>
-              <SortTh col="windSpeed" align="right" width="pl-6">Wind</SortTh>
-              <th className="text-center py-1.5 pl-6 pr-2 text-sm font-semibold text-gray-300">Dir</th>
-              <SortTh col="location">Location</SortTh>
+              <SortTh col="thermalDuration" align="right" width="w-16" className="hidden md:table-cell">Thermal Duration</SortTh>
+              <SortTh col="thermalDurationPct" align="right" width="w-16" className="hidden md:table-cell">Thermal Duration (%)</SortTh>
+              <th className="hidden md:table-cell text-center py-1.5 pl-6 pr-2 text-sm font-semibold text-gray-300">Wx</th>
+              <SortTh col="temp" align="right" width="pl-6" className="hidden md:table-cell">Temp</SortTh>
+              <SortTh col="windSpeed" align="right" width="pl-6" className="hidden md:table-cell">Wind</SortTh>
+              <th className="hidden md:table-cell text-center py-1.5 pl-6 pr-2 text-sm font-semibold text-gray-300">Dir</th>
+              <SortTh col="location" className="hidden sm:table-cell">Location</SortTh>
             </tr>
           </thead>
           <tbody>
@@ -227,29 +240,31 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
                     className="accent-blue-500 cursor-pointer"
                   />
                 </td>
-                <td className="py-1.5 px-2 text-white whitespace-nowrap">{formatSessionListDate(session.start_time)}</td>
+                <td className="py-1.5 px-2 text-white whitespace-nowrap">
+                  {formatDateShort(session.start_time)} <span className="text-gray-400">{sessionDayNumbers[session.id]}</span>
+                </td>
                 <td className="py-1.5 px-2 text-white text-right whitespace-nowrap">{formatDuration(session.duration_seconds)}</td>
                 <td className="py-1.5 px-2 text-center text-white">{session.launch_count}</td>
                 <td className="py-1.5 px-2 text-center text-white">{session.thermal_count}</td>
                 <td className="py-1.5 px-2 text-right text-white whitespace-nowrap">
                   {formatAltitudeValue(session.total_thermal_gain).toLocaleString()} {unitLabel}
                 </td>
-                <td className="py-1.5 px-2 text-right text-white whitespace-nowrap">{formatDuration(session.total_thermal_duration)}</td>
-                <td className="py-1.5 px-2 text-right text-white">
+                <td className="hidden md:table-cell py-1.5 px-2 text-right text-white whitespace-nowrap">{formatDuration(session.total_thermal_duration)}</td>
+                <td className="hidden md:table-cell py-1.5 px-2 text-right text-white">
                   {session.duration_seconds > 0
                     ? ((session.total_thermal_duration / session.duration_seconds) * 100).toFixed(1)
                     : '0.0'}%
                 </td>
-                <td className="py-1.5 pl-6 pr-2 text-center">
+                <td className="hidden md:table-cell py-1.5 pl-6 pr-2 text-center">
                   <WeatherIcon condition={session.weather_conditions} />
                 </td>
-                <td className="py-1.5 pl-6 pr-2 text-right text-white whitespace-nowrap">
+                <td className="hidden md:table-cell py-1.5 pl-6 pr-2 text-right text-white whitespace-nowrap">
                   {session.weather_temperature_f != null ? `${convertTemperature(session.weather_temperature_f)}${tempLabel}` : '—'}
                 </td>
-                <td className="py-1.5 pl-6 pr-2 text-right text-white whitespace-nowrap">
+                <td className="hidden md:table-cell py-1.5 pl-6 pr-2 text-right text-white whitespace-nowrap">
                   {session.weather_wind_speed_mph != null ? `${convertWindSpeed(session.weather_wind_speed_mph)} ${windLabel}` : '—'}
                 </td>
-                <td className="py-1.5 pl-6 pr-2 text-center text-white">
+                <td className="hidden md:table-cell py-1.5 pl-6 pr-2 text-center text-white">
                   {session.weather_wind_direction != null
                     ? <MoveUp
                         size={18}
@@ -259,11 +274,12 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
                       />
                     : '—'}
                 </td>
-                <td className="py-1.5 px-2 text-white whitespace-nowrap">{session.location?.name ?? '—'}</td>
+                <td className="hidden sm:table-cell py-1.5 px-2 text-white whitespace-nowrap">{session.location?.name ?? '—'}</td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
       </div>
 
       {editingSession && (

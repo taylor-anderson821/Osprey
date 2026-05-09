@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Upload, CheckCircle, AlertCircle, MapPin, Plus } from 'lucide-react';
 import { countries } from '../utils/countries';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../utils/api';
 
 export default function FileUpload({ onSuccess }) {
   const [file, setFile] = useState(null);
@@ -25,7 +24,7 @@ export default function FileUpload({ onSuccess }) {
 
   const fetchLocations = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/locations?approved_only=true`);
+      const response = await apiFetch('/api/locations?approved_only=true');
       const data = await response.json();
       setLocations(data);
     } catch (error) {
@@ -36,7 +35,7 @@ export default function FileUpload({ onSuccess }) {
   const handleAddLocation = async (e) => {
     e.preventDefault();
     try {
-      const response = await fetch(`${API_URL}/api/locations`, {
+      const response = await apiFetch('/api/locations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -80,7 +79,7 @@ export default function FileUpload({ onSuccess }) {
     formData.append('file', file);
 
     try {
-      const response = await fetch(`${API_URL}/api/upload`, {
+      const response = await apiFetch('/api/upload', {
         method: 'POST',
         body: formData,
       });

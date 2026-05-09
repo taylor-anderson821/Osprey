@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Shield, MapPin, Check, X } from 'lucide-react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../utils/api';
 
 export default function Admin() {
   const [pendingLocations, setPendingLocations] = useState([]);
@@ -16,7 +15,7 @@ export default function Admin() {
     setLoading(true);
     try {
       // Fetch all locations (approved and pending)
-      const response = await fetch(`${API_URL}/api/locations?approved_only=false`);
+      const response = await apiFetch('/api/locations?approved_only=false');
       const data = await response.json();
       
       setPendingLocations(data.filter(loc => !loc.approved));
@@ -30,7 +29,7 @@ export default function Admin() {
 
   const handleApprove = async (locationId) => {
     try {
-      const response = await fetch(`${API_URL}/api/locations/${locationId}/approve`, {
+      const response = await apiFetch(`/api/locations/${locationId}/approve`, {
         method: 'PUT',
       });
 
@@ -83,7 +82,7 @@ export default function Admin() {
                     Lat: {location.latitude.toFixed(4)}, Lon: {location.longitude.toFixed(4)}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Submitted: {new Date(location.created_at).toLocaleDateString()}
+                    Submitted: {new Date(location.created_at).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
                   </p>
                 </div>
                 <button

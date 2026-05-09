@@ -50,6 +50,8 @@ class User(Base):
     last_name = Column(String, nullable=True)
     photo_url = Column(String, nullable=True)
     home_location_id = Column(Integer, ForeignKey("flying_locations.id"), nullable=True)
+    password_hash = Column(String, nullable=True)
+    email_verified = Column(Boolean, default=True)
     role = Column(String, default="user")  # "user" or "admin"
     created_at = Column(DateTime(timezone=True))
     

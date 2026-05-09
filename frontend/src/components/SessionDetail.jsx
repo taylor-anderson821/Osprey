@@ -32,7 +32,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
   // Get unique dates from all sessions
   const uniqueDates = [...new Set(sessions.map(s => {
     const date = new Date(s.start_time);
-    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
   }))];
 
   // Get current session's date
@@ -255,7 +255,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
           
           {/* Aircraft Model - if available */}
           {session.aircraft_model && (
-            <div className="text-2xl font-bold text-white">
+            <div className="text-base sm:text-2xl font-bold text-white">
               {session.aircraft_model}
             </div>
           )}
@@ -287,43 +287,42 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
           )}
         </div>
 
-        {/* Metrics row - 56.25% width (75% of 75%) to align with chart */}
-        <div className="w-9/16 mb-6" style={{ width: '56.25%', marginLeft: '1in' }}>
-          <div className="flex justify-between">
-            <div className="text-center">
-              <div className="text-sm text-gray-400">Duration</div>
-              <div className="text-xl font-bold text-white">{formatDurationHMS(session.duration_seconds)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-400">Launches</div>
-              <div className="text-xl font-bold text-white">{session.launch_count}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-400">Thermals</div>
-              <div className="text-xl font-bold text-white">{session.thermal_count}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-400">Thermal Gain</div>
-              <div className="text-xl font-bold text-white">{formatAltitudeValue(session.total_thermal_gain).toLocaleString()} {unitLabel}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-400">Thermal Duration</div>
-              <div className="text-xl font-bold text-white">{formatDurationHMS(session.total_thermal_duration)}</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm text-gray-400">Thermal Duration (%)</div>
-              <div className="text-xl font-bold text-white">
-                {session.duration_seconds > 0 
-                  ? ((session.total_thermal_duration / session.duration_seconds) * 100).toFixed(1)
-                  : '0.0'}%
-              </div>
+        {/* Metrics row */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
+          <div className="text-center">
+            <div className="text-xs sm:text-sm text-gray-400">Duration</div>
+            <div className="text-base sm:text-xl font-bold text-white">{formatDurationHMS(session.duration_seconds)}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs sm:text-sm text-gray-400">Launches</div>
+            <div className="text-base sm:text-xl font-bold text-white">{session.launch_count}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs sm:text-sm text-gray-400">Thermals</div>
+            <div className="text-base sm:text-xl font-bold text-white">{session.thermal_count}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs sm:text-sm text-gray-400">Thermal Gain</div>
+            <div className="text-base sm:text-xl font-bold text-white">{formatAltitudeValue(session.total_thermal_gain).toLocaleString()} {unitLabel}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs sm:text-sm text-gray-400">Thermal Duration</div>
+            <div className="text-base sm:text-xl font-bold text-white">{formatDurationHMS(session.total_thermal_duration)}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-xs sm:text-sm text-gray-400">Therm Duration %</div>
+            <div className="text-base sm:text-xl font-bold text-white">
+              {session.duration_seconds > 0
+                ? ((session.total_thermal_duration / session.duration_seconds) * 100).toFixed(1)
+                : '0.0'}%
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           {/* Chart - takes 9/12 width on large screens */}
-          <div className="lg:col-span-9">
+          <div className="lg:col-span-9 overflow-x-auto">
+            <div style={{ minWidth: '560px' }}>
             <ResponsiveContainer width="100%" height={450}>
               <ComposedChart 
                 data={chartData} 
@@ -388,6 +387,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                 )}
               </ComposedChart>
             </ResponsiveContainer>
+            </div>
           </div>
 
           {/* Thermal Summary - takes 3/12 width on large screens */}
