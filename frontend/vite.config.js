@@ -5,10 +5,16 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true
+        target: 'http://192.168.68.105:8000',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.removeHeader('origin');
+          });
+        }
       }
     }
   }

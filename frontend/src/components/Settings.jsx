@@ -1,11 +1,28 @@
-import { Settings as SettingsIcon, User, Ruler, MapPin } from 'lucide-react';
+import { Settings as SettingsIcon, User, Ruler, MapPin, Cloud } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ProfileSetup from './ProfileSetup';
 import LocationManager from './LocationManager';
+import { apiFetch } from '../utils/api';
 
 export default function Settings() {
   const [units, setUnits] = useState('imperial');
   const [activeTab, setActiveTab] = useState('profile');
+  const [weatherStatus, setWeatherStatus] = useState(null);
+  const [weatherLoading, setWeatherLoading] = useState(false);
+
+  const handleRefreshWeather = async () => {
+    setWeatherLoading(true);
+    setWeatherStatus(null);
+    try {
+      const response = await apiFetch('/api/backfill-weather', { method: 'POST' });
+      const data = await response.json();
+      setWeatherStatus(data.message);
+    } catch (err) {
+      setWeatherStatus('Error refreshing weather');
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
 
   useEffect(() => {
     // Load saved units or use imperial as default
@@ -61,6 +78,17 @@ export default function Settings() {
           <MapPin className="inline mr-2" size={18} />
           Locations
         </button>
+        <button
+          onClick={() => setActiveTab('data')}
+          className={`px-4 py-2 font-medium transition ${
+            activeTab === 'data'
+              ? 'text-blue-400 border-b-2 border-blue-400'
+              : 'text-gray-400 hover:text-gray-200'
+          }`}
+        >
+          <Cloud className="inline mr-2" size={18} />
+          Data
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -109,6 +137,27 @@ export default function Settings() {
       )}
 
       {activeTab === 'locations' && <LocationManager />}
+
+      {activeTab === 'data' && (
+        <div className="bg-gray-800 rounded-lg shadow-md p-6 border border-gray-700">
+          <h3 className="text-xl font-bold text-white mb-2">Weather Data</h3>
+          <p className="text-gray-400 text-sm mb-4">
+            Fetch missing weather for all sessions that have a location assigned.
+            Use this after uploading new sessions or if weather is missing.
+          </p>
+          <button
+            onClick={handleRefreshWeather}
+            disabled={weatherLoading}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white font-semibold py-2 px-6 rounded transition"
+          >
+            <Cloud size={16} />
+            {weatherLoading ? 'Refreshing…' : 'Refresh Weather'}
+          </button>
+          {weatherStatus && (
+            <p className="mt-3 text-sm text-gray-300">{weatherStatus}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight, MoveUp, Wind } from 'lucide-react';
 import { useState } from 'react';
-import { Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, ReferenceArea } from 'recharts';
+import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceArea } from 'recharts';
 import { formatSessionDetailDate } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
 import { WeatherIcon } from '../utils/weatherIcon';
@@ -35,28 +35,21 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
     return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
   }))];
 
-  // Get current session's date
-  const currentDate = new Date(session.start_time).toLocaleDateString('en-US', { 
-    year: 'numeric', month: 'short', day: 'numeric' 
+  // Get current session's date — same format as uniqueDates
+  const currentDate = new Date(session.start_time).toLocaleDateString('en-US', {
+    month: '2-digit', day: '2-digit', year: '2-digit'
   });
 
   // Filter sessions by current date
-  const sessionsOnCurrentDate = sessions.filter(s => {
-    const sessDate = new Date(s.start_time).toLocaleDateString('en-US', { 
-      year: 'numeric', month: 'short', day: 'numeric' 
-    });
-    return sessDate === currentDate;
-  });
+  const sessionsOnCurrentDate = sessions.filter(s =>
+    new Date(s.start_time).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) === currentDate
+  );
 
   // Handle date change
   const handleDateChange = (selectedDate) => {
-    // Find first session on the selected date
-    const sessionOnDate = sessions.find(s => {
-      const sessDate = new Date(s.start_time).toLocaleDateString('en-US', { 
-        year: 'numeric', month: 'short', day: 'numeric' 
-      });
-      return sessDate === selectedDate;
-    });
+    const sessionOnDate = sessions.find(s =>
+      new Date(s.start_time).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' }) === selectedDate
+    );
     
     if (sessionOnDate) {
       const index = sessions.findIndex(s => s.id === sessionOnDate.id);
@@ -287,41 +280,41 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
           )}
         </div>
 
-        {/* Metrics row */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Duration</div>
-            <div className="text-base sm:text-xl font-bold text-white">{formatDurationHMS(session.duration_seconds)}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Launches</div>
-            <div className="text-base sm:text-xl font-bold text-white">{session.launch_count}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Thermals</div>
-            <div className="text-base sm:text-xl font-bold text-white">{session.thermal_count}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Thermal Gain</div>
-            <div className="text-base sm:text-xl font-bold text-white">{formatAltitudeValue(session.total_thermal_gain).toLocaleString()} {unitLabel}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Thermal Duration</div>
-            <div className="text-base sm:text-xl font-bold text-white">{formatDurationHMS(session.total_thermal_duration)}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-xs sm:text-sm text-gray-400">Therm Duration %</div>
-            <div className="text-base sm:text-xl font-bold text-white">
-              {session.duration_seconds > 0
-                ? ((session.total_thermal_duration / session.duration_seconds) * 100).toFixed(1)
-                : '0.0'}%
-            </div>
-          </div>
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Chart - takes 9/12 width on large screens */}
-          <div className="lg:col-span-9 overflow-x-auto">
+          {/* Chart + stats - takes 9/12 width on large screens */}
+          <div className="lg:col-span-9">
+            {/* Metrics row centered over chart */}
+            <div className="flex flex-wrap justify-center gap-x-12 gap-y-3 mb-4">
+              <div className="text-center">
+                <div className="text-sm text-gray-400">Duration</div>
+                <div className="text-xl font-bold text-white">{formatDurationHMS(session.duration_seconds)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-400">Launches</div>
+                <div className="text-xl font-bold text-white">{session.launch_count}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-400">Thermals</div>
+                <div className="text-xl font-bold text-white">{session.thermal_count}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-400">Thermal Gain</div>
+                <div className="text-xl font-bold text-white">{formatAltitudeValue(session.total_thermal_gain).toLocaleString()} {unitLabel}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-400">Thermal Duration</div>
+                <div className="text-xl font-bold text-white">{formatDurationHMS(session.total_thermal_duration)}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-gray-400">Thermal Duration (%)</div>
+                <div className="text-xl font-bold text-white">
+                  {session.duration_seconds > 0
+                    ? ((session.total_thermal_duration / session.duration_seconds) * 100).toFixed(1)
+                    : '0.0'}%
+                </div>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
             <div style={{ minWidth: '560px' }}>
             <ResponsiveContainer width="100%" height={450}>
               <ComposedChart 
@@ -356,16 +349,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                   shared={false}
                   trigger="axis"
                 />
-                <Legend 
-                  wrapperStyle={{ paddingTop: '10px' }}
-                  iconType="line"
-                  payload={[
-                    { value: `Alt (${unitLabel})`, type: 'line', color: '#3b82f6' },
-                    { value: 'Therm Start', type: 'circle', color: '#10b981' },
-                    { value: 'Therm End', type: 'circle', color: '#ef4444' }
-                  ]}
-                />
-                <Line 
+<Line 
                   type="linear"
                   dataKey="altitude" 
                   stroke="#3b82f6" 
@@ -388,6 +372,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
               </ComposedChart>
             </ResponsiveContainer>
             </div>
+          </div>
           </div>
 
           {/* Thermal Summary - takes 3/12 width on large screens */}

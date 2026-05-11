@@ -29,6 +29,8 @@ frontend/package-lock.json
 *.log
 startup.log
 
+startup-steps.md
+
 # Archive folder
 archive/
 ROUTER_UPDATE.md

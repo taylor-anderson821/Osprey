@@ -44,13 +44,15 @@ def degrees_to_cardinal(deg):
     return dirs[round(deg / 22.5) % 16]
 
 def fetch_weather_for_session(lat: float, lon: float, session_time: datetime) -> Optional[dict]:
-    """Fetch historical weather from Open-Meteo for a given location and time."""
+    """Fetch weather from Open-Meteo for a given location and time.
+    Uses the forecast API for recent sessions (archive has ~5 day lag)."""
     try:
         if session_time.tzinfo is None:
             session_time = session_time.replace(tzinfo=timezone.utc)
 
         date_str = session_time.strftime('%Y-%m-%d')
-        url = "https://archive-api.open-meteo.com/v1/archive"
+        days_ago = (datetime.now(timezone.utc) - session_time).days
+        url = "https://api.open-meteo.com/v1/forecast" if days_ago < 7 else "https://archive-api.open-meteo.com/v1/archive"
         params = {
             "latitude": lat,
             "longitude": lon,
@@ -92,12 +94,14 @@ def fetch_weather_for_session(lat: float, lon: float, session_time: datetime) ->
 # Database tables are managed by Alembic migrations
 # Run: alembic upgrade head
 
-def store_weather_on_session(db_session):
-    """Fetch weather and store it on the session if location is set."""
-    if db_session.location and not db_session.weather_temperature_f:
+def store_weather_on_session(db_session, fallback_location=None):
+    """Fetch weather and store it on the session.
+    Uses session location if set, otherwise falls back to fallback_location (e.g. user's home location)."""
+    location = db_session.location or fallback_location
+    if location and not db_session.weather_temperature_f:
         weather = fetch_weather_for_session(
-            db_session.location.latitude,
-            db_session.location.longitude,
+            location.latitude,
+            location.longitude,
             db_session.start_time
         )
         if weather:
@@ -298,9 +302,10 @@ def backfill_weather(
         .filter(models.FlightSession.weather_temperature_f == None)\
         .all()
 
+    home_location = current_user.home_location
     updated = 0
     for session in sessions:
-        store_weather_on_session(session)
+        store_weather_on_session(session, fallback_location=home_location)
         if session.weather_temperature_f is not None:
             updated += 1
             db.commit()
@@ -519,6 +524,11 @@ def update_session_location(
         raise HTTPException(status_code=404, detail="Location not found")
 
     session.location_id = location_id
+    session.weather_temperature_f = None
+    session.weather_wind_speed_mph = None
+    session.weather_wind_direction = None
+    session.weather_conditions = None
+    store_weather_on_session(session, fallback_location=location)
     db.commit()
 
     return {"message": "Location updated successfully"}

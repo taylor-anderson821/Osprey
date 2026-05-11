@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { User, MapPin, Save, Plus, Upload } from 'lucide-react';
 import { countries } from '../utils/countries';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../utils/api';
 
 export default function ProfileSetup() {
   const [profile, setProfile] = useState(null);
@@ -32,7 +31,7 @@ export default function ProfileSetup() {
 
   const fetchProfile = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/profile`);
+      const response = await apiFetch('/api/profile');
       const data = await response.json();
       setProfile(data);
       setFormData({
@@ -65,7 +64,7 @@ export default function ProfileSetup() {
 
   const fetchLocations = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/locations`);
+      const response = await apiFetch('/api/locations');
       const data = await response.json();
       setLocations(data);
     } catch (error) {
@@ -78,11 +77,9 @@ export default function ProfileSetup() {
     setSaving(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/profile`, {
+      const response = await apiFetch('/api/profile', {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       });
 
@@ -121,11 +118,9 @@ export default function ProfileSetup() {
     e.preventDefault();
     
     try {
-      const response = await fetch(`${API_URL}/api/locations`, {
+      const response = await apiFetch('/api/locations', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: locationFormData.name,
           country: locationFormData.country,
