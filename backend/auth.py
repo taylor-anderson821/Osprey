@@ -13,7 +13,7 @@ from database import get_db
 
 SECRET_KEY = os.getenv("SECRET_KEY", "change-this-secret-key-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 90  # 90 days
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 import io
 import httpx
 import uuid
@@ -192,9 +193,14 @@ async def upload_tlm_file(
             altitude_data=session_data['altitude_data'],
             aircraft_model=session_data.get('aircraft_model')
         )
+        if current_user.home_location_id:
+            db_session.location_id = current_user.home_location_id
         db.add(db_session)
         db.flush()
         session_ids.append(db_session.id)
+
+        if current_user.home_location_id:
+            store_weather_on_session(db_session, fallback_location=current_user.home_location)
 
         for thermal_data in session_data['thermals']:
             db_thermal = models.Thermal(
@@ -287,6 +293,57 @@ def get_session_detail(
         **session.__dict__,
         "thermals": thermals,
         "location": session.location,
+    }
+
+@app.get("/api/profile-stats")
+def get_profile_stats(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Return pre-aggregated profile stats — avoids shipping all session/thermal data to the client."""
+    uid = current_user.id
+
+    session_agg = db.query(
+        func.count(func.distinct(func.date(models.FlightSession.start_time))).label("flying_days"),
+        func.sum(models.FlightSession.duration_seconds).label("total_flight_time"),
+        func.sum(models.FlightSession.total_thermal_gain).label("total_thermal_gain"),
+        func.sum(models.FlightSession.total_thermal_duration).label("total_thermal_duration"),
+    ).filter(models.FlightSession.user_id == uid).one()
+
+    def best_session(col):
+        row = db.query(models.FlightSession.id, col)\
+            .filter(models.FlightSession.user_id == uid)\
+            .order_by(col.desc()).first()
+        return {"id": row[0], "value": float(row[1])} if row and row[1] else None
+
+    max_flight = best_session(models.FlightSession.duration_seconds)
+    max_session_gain = best_session(models.FlightSession.total_thermal_gain)
+    max_session_thermal_dur = best_session(models.FlightSession.total_thermal_duration)
+
+    def best_thermal(col):
+        row = db.query(models.Thermal.session_id, col)\
+            .join(models.FlightSession)\
+            .filter(models.FlightSession.user_id == uid)\
+            .order_by(col.desc()).first()
+        return {"session_id": row[0], "value": float(row[1])} if row and row[1] else None
+
+    aircraft = [r[0] for r in db.query(models.FlightSession.aircraft_model)
+                .filter(models.FlightSession.user_id == uid,
+                        models.FlightSession.aircraft_model.isnot(None))
+                .distinct().order_by(models.FlightSession.aircraft_model).all()]
+
+    return {
+        "flying_days": session_agg.flying_days or 0,
+        "total_flight_time": float(session_agg.total_flight_time or 0),
+        "total_thermal_gain": float(session_agg.total_thermal_gain or 0),
+        "total_thermal_duration": float(session_agg.total_thermal_duration or 0),
+        "max_flight_time_session": max_flight,
+        "max_thermal_gain_session": max_session_gain,
+        "max_thermal_duration_session": max_session_thermal_dur,
+        "max_thermal_duration": best_thermal(models.Thermal.duration),
+        "max_thermal_gain": best_thermal(models.Thermal.altitude_gain),
+        "max_avg_climb_rate": best_thermal(models.Thermal.avg_climb_rate),
+        "aircraft_models": aircraft,
     }
 
 @app.post("/api/backfill-weather")

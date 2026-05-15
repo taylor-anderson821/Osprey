@@ -319,7 +319,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
             <ResponsiveContainer width="100%" height={450}>
               <ComposedChart 
                 data={chartData} 
-                margin={{ top: 10, right: 40, left: 10, bottom: 30 }}
+                margin={{ top: 10, right: 0, left: 0, bottom: 30 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis 

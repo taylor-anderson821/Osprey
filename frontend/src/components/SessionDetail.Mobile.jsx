@@ -170,9 +170,14 @@ export default function SessionDetailMobile({ session, sessions, onBack, onSessi
         )}
 
         {/* Chart */}
-        <div className="mt-3">
+        <div
+          className={`mt-3${timeRange > 1200 ? ' overflow-x-auto' : ''}`}
+          onTouchStart={timeRange > 1200 ? (e) => e.stopPropagation() : undefined}
+          onTouchEnd={timeRange > 1200 ? (e) => e.stopPropagation() : undefined}
+        >
+          <div style={timeRange > 1200 ? { width: `${(timeRange / 1200) * 100}%` } : {}}>
           <ResponsiveContainer width="100%" height={260}>
-              <ComposedChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <ComposedChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="timestamp"
@@ -192,7 +197,7 @@ export default function SessionDetailMobile({ session, sessions, onBack, onSessi
                   ticks={yTicks}
                   domain={[minYTick, maxYTick]}
                   stroke="#6b7280"
-                  width={45}
+                  width={35}
                 />
                 <Tooltip
                   content={<CustomTooltip unitLabel={unitLabel} />}
@@ -223,6 +228,7 @@ export default function SessionDetailMobile({ session, sessions, onBack, onSessi
                 )}
               </ComposedChart>
           </ResponsiveContainer>
+          </div>
         </div>
 
         {/* Stats */}

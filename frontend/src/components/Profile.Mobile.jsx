@@ -4,50 +4,39 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../utils/api';
 
 export default function ProfileMobile() {
-  const [profile, setProfile] = useState(null);
-  const [sessions, setSessions] = useState([]);
-  const [dailySummary, setDailySummary] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cached = (() => {
+    try { return JSON.parse(localStorage.getItem('profile_cache') || 'null'); } catch { return null; }
+  })();
+
+  const [profile, setProfile] = useState(cached?.profile || null);
+  const [stats, setStats] = useState(cached?.stats || null);
+  const [loading, setLoading] = useState(!cached);
   const [units, setUnits] = useState('imperial');
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchProfile();
-    fetchSessions();
-    fetchDailySummary();
     const savedUnits = localStorage.getItem('units') || 'imperial';
     setUnits(savedUnits);
+    fetchAll();
   }, []);
 
-  const fetchProfile = async () => {
+  const fetchAll = async () => {
     try {
-      const response = await apiFetch('/api/profile');
-      const data = await response.json();
-      setProfile(data);
+      const [profileRes, statsRes] = await Promise.all([
+        apiFetch('/api/profile'),
+        apiFetch('/api/profile-stats'),
+      ]);
+      const [profileData, statsData] = await Promise.all([
+        profileRes.json(),
+        statsRes.json(),
+      ]);
+      setProfile(profileData);
+      setStats(statsData);
+      localStorage.setItem('profile_cache', JSON.stringify({ profile: profileData, stats: statsData }));
     } catch (error) {
-      console.error('Error fetching profile:', error);
-    }
-  };
-
-  const fetchSessions = async () => {
-    try {
-      const response = await apiFetch('/api/sessions-with-thermals');
-      const data = await response.json();
-      setSessions(data);
-    } catch (error) {
-      console.error('Error fetching sessions:', error);
+      console.error('Error fetching profile data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchDailySummary = async () => {
-    try {
-      const response = await apiFetch('/api/daily-summary');
-      const data = await response.json();
-      setDailySummary(data);
-    } catch (error) {
-      console.error('Error fetching daily summary:', error);
     }
   };
 
@@ -87,67 +76,56 @@ export default function ProfileMobile() {
     return `${(rateInFeetPerSecond * 0.3048).toFixed(1)} m/s`;
   };
 
-  const flyingDays = dailySummary.length;
-  const totalThermalGain = sessions.reduce((sum, s) => sum + s.total_thermal_gain, 0);
-  const totalThermalDuration = sessions.reduce((sum, s) => sum + s.total_thermal_duration, 0);
-  const totalFlightTime = sessions.reduce((sum, s) => sum + s.duration_seconds, 0);
+  const flyingDays = stats?.flying_days ?? 0;
+  const totalFlightTime = stats?.total_flight_time ?? 0;
+  const totalThermalGain = stats?.total_thermal_gain ?? 0;
+  const totalThermalDuration = stats?.total_thermal_duration ?? 0;
+  const aircraftModels = stats?.aircraft_models ?? [];
 
-  const maxFlightTime = sessions.length > 0 ? Math.max(...sessions.map(s => s.duration_seconds)) : 0;
-  const maxThermalGain = sessions.length > 0 ? Math.max(...sessions.map(s => s.total_thermal_gain)) : 0;
-  const maxThermalDuration = sessions.length > 0 ? Math.max(...sessions.map(s => s.total_thermal_duration)) : 0;
+  const maxFlightTimeSession = stats?.max_flight_time_session;
+  const maxThermalGainSession = stats?.max_thermal_gain_session;
+  const maxThermalDurationSession = stats?.max_thermal_duration_session;
+  const maxThermalDurationThermal = stats?.max_thermal_duration;
+  const maxThermalGainThermal = stats?.max_thermal_gain;
+  const maxClimbRateThermal = stats?.max_avg_climb_rate;
 
-  const maxFlightTimeSession = sessions.find(s => s.duration_seconds === maxFlightTime);
-  const maxThermalGainSession = sessions.find(s => s.total_thermal_gain === maxThermalGain);
-  const maxThermalDurationSession = sessions.find(s => s.total_thermal_duration === maxThermalDuration);
-
-  const allThermals = sessions.flatMap(session =>
-    session.thermals ? session.thermals.map(thermal => ({
-      ...thermal,
-      session_id: session.id,
-      avg_climb_rate: thermal.duration > 0 ? thermal.altitude_gain / thermal.duration : 0,
-    })) : []
-  );
-
-  const maxSingleThermalDuration = allThermals.length > 0 ? Math.max(...allThermals.map(t => t.duration)) : 0;
-  const maxSingleThermalGain = allThermals.length > 0 ? Math.max(...allThermals.map(t => t.altitude_gain)) : 0;
-  const maxAvgClimbRate = allThermals.length > 0 ? Math.max(...allThermals.map(t => t.avg_climb_rate)) : 0;
-
-  const maxThermalDurationThermal = allThermals.find(t => t.duration === maxSingleThermalDuration);
-  const maxThermalGainThermal = allThermals.find(t => t.altitude_gain === maxSingleThermalGain);
-  const maxClimbRateThermal = allThermals.find(t => t.avg_climb_rate === maxAvgClimbRate);
-
-  const aircraftModels = [...new Set(sessions.map(s => s.aircraft_model).filter(Boolean))].sort();
+  const maxFlightTime = maxFlightTimeSession?.value ?? 0;
+  const maxThermalGain = maxThermalGainSession?.value ?? 0;
+  const maxThermalDuration = maxThermalDurationSession?.value ?? 0;
+  const maxSingleThermalDuration = maxThermalDurationThermal?.value ?? 0;
+  const maxSingleThermalGain = maxThermalGainThermal?.value ?? 0;
+  const maxAvgClimbRate = maxClimbRateThermal?.value ?? 0;
 
   if (loading) return <div className="text-center py-12">Loading...</div>;
 
   return (
     <div className="max-w-sm mx-auto flex flex-col gap-6">
-      <div>
-        <div className="flex items-center gap-3 mb-2">
-          {profile?.photo_url ? (
-            <img
-              src={profile.photo_url}
-              alt="Profile"
-              className="w-16 h-16 rounded-full object-cover border-2 border-gray-600 flex-shrink-0"
-              onError={(e) => { e.target.style.display = 'none'; }}
-            />
-          ) : (
-            <div className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center border-2 border-gray-600 flex-shrink-0">
-              <User size={32} className="text-gray-400" />
-            </div>
-          )}
+      <div className="flex items-center gap-3">
+        {profile?.photo_url ? (
+          <img
+            src={profile.photo_url}
+            alt="Profile"
+            className="w-16 h-16 rounded-full object-cover border-2 border-gray-600 flex-shrink-0"
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center border-2 border-gray-600 flex-shrink-0">
+            <User size={32} className="text-gray-400" />
+          </div>
+        )}
+        <div className="flex flex-col min-w-0">
           <h2 className="text-xl font-bold text-white">
             {profile?.first_name && profile?.last_name
               ? `${profile.first_name} ${profile.last_name}`
               : profile?.email || 'User Profile'}
           </h2>
+          {profile?.home_location && (
+            <p className="text-sm text-gray-400">{profile.home_location.name}</p>
+          )}
+          {aircraftModels.length > 0 && (
+            <p className="text-sm text-gray-400">{aircraftModels.join(', ')}</p>
+          )}
         </div>
-        {profile?.home_location && (
-          <p className="text-sm text-gray-400">{profile.home_location.name}</p>
-        )}
-        {aircraftModels.length > 0 && (
-          <p className="text-sm text-gray-400">{aircraftModels.join(', ')}</p>
-        )}
       </div>
 
       <div>
@@ -174,7 +152,7 @@ export default function ProfileMobile() {
         </table>
       </div>
 
-      {sessions.length > 0 && (
+      {stats?.max_flight_time_session && (
         <div>
           <h3 className="text-sm font-medium text-teal-400 mb-3">Session Records</h3>
           <table className="text-xs w-full">
@@ -196,7 +174,7 @@ export default function ProfileMobile() {
         </div>
       )}
 
-      {allThermals.length > 0 && (
+      {stats?.max_thermal_duration && (
         <div>
           <h3 className="text-sm font-medium text-teal-400 mb-3">Thermal Records</h3>
           <table className="text-xs w-full">

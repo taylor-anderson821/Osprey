@@ -25,24 +25,50 @@ export default function ProfileSetup() {
   });
 
   useEffect(() => {
-    fetchProfile();
-    fetchLocations();
+    // Seed form from cache for instant render
+    try {
+      const cached = JSON.parse(localStorage.getItem('profile_cache') || 'null');
+      if (cached?.profile) {
+        const p = cached.profile;
+        setProfile(p);
+        setFormData({
+          first_name: p.first_name || '',
+          last_name: p.last_name || '',
+          photo_url: p.photo_url || '',
+          home_location_id: p.home_location_id || null,
+        });
+        setPhotoPreview(p.photo_url || '');
+        setLoading(false);
+      }
+    } catch {}
+    fetchAll();
   }, []);
 
-  const fetchProfile = async () => {
+  const fetchAll = async () => {
     try {
-      const response = await apiFetch('/api/profile');
-      const data = await response.json();
-      setProfile(data);
+      const [profileRes, locationsRes] = await Promise.all([
+        apiFetch('/api/profile'),
+        apiFetch('/api/locations'),
+      ]);
+      const [profileData, locationsData] = await Promise.all([
+        profileRes.json(),
+        locationsRes.json(),
+      ]);
+      setProfile(profileData);
+      setLocations(locationsData);
       setFormData({
-        first_name: data.first_name || '',
-        last_name: data.last_name || '',
-        photo_url: data.photo_url || '',
-        home_location_id: data.home_location_id || null
+        first_name: profileData.first_name || '',
+        last_name: profileData.last_name || '',
+        photo_url: profileData.photo_url || '',
+        home_location_id: profileData.home_location_id || null,
       });
-      setPhotoPreview(data.photo_url || '');
+      setPhotoPreview(profileData.photo_url || '');
+      localStorage.setItem('profile_cache', JSON.stringify({
+        ...JSON.parse(localStorage.getItem('profile_cache') || '{}'),
+        profile: profileData,
+      }));
     } catch (error) {
-      console.error('Error fetching profile:', error);
+      console.error('Error fetching profile setup data:', error);
     } finally {
       setLoading(false);
     }
@@ -59,16 +85,6 @@ export default function ProfileSetup() {
         setFormData(prev => ({ ...prev, photo_url: reader.result }));
       };
       reader.readAsDataURL(file);
-    }
-  };
-
-  const fetchLocations = async () => {
-    try {
-      const response = await apiFetch('/api/locations');
-      const data = await response.json();
-      setLocations(data);
-    } catch (error) {
-      console.error('Error fetching locations:', error);
     }
   };
 

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Routes, Route, Link, useNavigate, useParams, useLocation, Navigate } from 'react-router-dom';
 import { BarChart3, Settings as SettingsIcon, Calendar, User } from 'lucide-react';
-import SessionListMobile from './components/SessionList.Mobile';
 import SessionDetailMobile from './components/SessionDetail.Mobile';
 import DailySummaryMobile from './components/DailySummary.Mobile';
 import Settings from './components/Settings';
@@ -114,10 +113,14 @@ export default function MobileApp() {
         </div>
       </nav>
 
-      <main className="container mx-auto px-4 py-6 pb-24">
+      <main className="container mx-auto px-4 pb-24" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 56px)' }}>
         <Routes>
           <Route path="/" element={<Navigate to="/profile" replace />} />
-          <Route path="/sessions" element={<SessionListMobile sessions={sessions} onSessionClick={handleSessionClick} onSessionDeleted={fetchSessions} />} />
+          <Route path="/sessions" element={
+            sessions.length > 0
+              ? <Navigate to={`/sessions/${sessions[sessions.length - 1].id}`} replace />
+              : <div className="text-white text-center py-8">No sessions yet</div>
+          } />
           <Route path="/sessions/:sessionId" element={<MobileSessionDetailWrapper sessions={sessions} onSessionChange={handleSessionClick} />} />
           <Route path="/daily" element={<DailySummaryMobile onDateClick={handleDateClick} />} />
           <Route path="/profile" element={<ProfileMobile />} />

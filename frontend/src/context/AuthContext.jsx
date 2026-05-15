@@ -24,11 +24,11 @@ export function AuthProvider({ children }) {
       if (response.ok) {
         const data = await response.json();
         setUser(data);
-      } else {
+      } else if (response.status === 401) {
         localStorage.removeItem('token');
       }
     } catch {
-      localStorage.removeItem('token');
+      // Network error — leave the token intact so the user stays logged in
     } finally {
       setLoading(false);
     }

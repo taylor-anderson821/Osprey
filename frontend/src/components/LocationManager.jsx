@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { MapPin, Plus, Check, Clock, X } from 'lucide-react';
 import { countries } from '../utils/countries';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../utils/api';
 
 export default function LocationManager() {
   const [locations, setLocations] = useState([]);
@@ -24,7 +23,7 @@ export default function LocationManager() {
 
   const fetchLocations = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/locations?approved_only=false`);
+      const response = await apiFetch('/api/locations?approved_only=false');
       const data = await response.json();
       setLocations(data);
     } catch (error) {
@@ -57,11 +56,9 @@ export default function LocationManager() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/locations`, {
+      const response = await apiFetch('/api/locations', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: formData.name,
           country: formData.country,
