@@ -16,7 +16,7 @@ Osprey is a web app that generates soaring analytics for RC sailplanes. It analy
 
 ## How It Works
 
-Osprey parses `.TLM` files from Spektrum receivers. It downsamples altitude and variometer data at 1 Hz and applies a moving average to smooth the altitude data. It then identifies:
+Osprey parses `.TLM` files from Spektrum receivers. It downsamples altitude and variometer data at 1 Hz and then identifies:
 
 - **Thermal peaks** — local altitude maxima above a minimum height threshold
 - **Launch peaks** — points associated with high climb rates (motor launches)
