@@ -12,11 +12,12 @@ Osprey is a web app that generates soaring analytics for RC sailplanes. It analy
 - **Daily Summary** — Bar charts showing thermal gain and duration by day
 - **Soaring Log** — Lifetime totals for flight time, thermal gain, and thermal duration
 - **Session & Thermal Maximums** — Personal records with one-click navigation to session details
+- **AI / MCP Access** — Query your flight data in natural language via an [MCP](https://modelcontextprotocol.io/) server that plugs into Claude and other AI assistants
 - **Imperial / Metric** — Select units of measure **Settings**
 
 ## How It Works
 
-Osprey parses `.TLM` files from Spektrum receivers. It downsamples altitude and variometer data at 1 Hz and applies a moving average to smooth the altitude data. It then identifies:
+Osprey parses `.TLM` files from Spektrum receivers. It downsamples altitude and variometer data at 1 Hz and then identifies:
 
 - **Thermal peaks** — local altitude maxima above a minimum height threshold
 - **Launch peaks** — points associated with high climb rates (motor launches)
@@ -31,7 +32,16 @@ Caught thermals are identified by working backwards from each thermal peak to fi
 | Frontend | React, Recharts, Tailwind CSS |
 | Backend | Python, FastAPI |
 | Database | PostgreSQL |
+| AI Access | MCP (Model Context Protocol) |
 | Deployment | Docker Compose |
+
+## MCP Server
+
+Osprey includes an [MCP](https://modelcontextprotocol.io/) server (`backend/mcp_server.py`) that exposes your flight data as tools an AI assistant like Claude can call directly. Instead of clicking through charts and session lists, you can just ask:
+
+- "What were the weather conditions at my favorite flying field during my 5 best thermals?"
+- "Compare the average climb rates across all my models."
+- "Where did I fly the most last year?"
 
 ## Getting Started
 
@@ -58,7 +68,41 @@ Caught thermals are identified by working backwards from each thermal peak to fi
    docker-compose up
 ```
 
-4. Open [http://localhost:5173](http://localhost:5173) in your browser.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+5. Install the backend and MCP dependencies, then point the server at your database and account:
+
+```bash
+pip install -r backend/requirements.txt "mcp[cli]"
+```
+
+```bash
+DATABASE_URL=postgresql://osprey:osprey_dev_password@localhost:5432/osprey
+OSPREY_USER_EMAIL=you@example.com
+```
+
+6. Register the MCP server with your MCP client, using those environment variables.
+
+   **Claude Code CLI:**
+   ```bash
+   claude mcp add osprey -- python backend/mcp_server.py
+   ```
+
+   **Claude Desktop:** add an entry to your `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`, Windows: `%APPDATA%\Claude\claude_desktop_config.json`), then restart Claude Desktop:
+   ```json
+   {
+     "mcpServers": {
+       "osprey": {
+         "command": "python",
+         "args": ["/absolute/path/to/Osprey/backend/mcp_server.py"],
+         "env": {
+           "DATABASE_URL": "postgresql://osprey:osprey_dev_password@localhost:5432/osprey",
+           "OSPREY_USER_EMAIL": "you@example.com"
+         }
+       }
+     }
+   }
+   ```
 
 ## Setting Up Your Transmitter to Capture Telemetry
 

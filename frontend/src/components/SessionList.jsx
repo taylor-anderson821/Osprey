@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { ChevronUp, ChevronDown, Trash2, MapPin, MoveUp } from 'lucide-react';
 import { formatDateShort } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
@@ -170,6 +170,32 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
   }
 
   const hasSelection = selectedIds.size > 0;
+  const allSelected = filteredSessions.length > 0 && filteredSessions.every(s => selectedIds.has(s.id));
+  const someSelected = !allSelected && filteredSessions.some(s => selectedIds.has(s.id));
+
+  const selectAllRef = useRef(null);
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected;
+    }
+  }, [someSelected]);
+
+  const toggleSelectAll = (e) => {
+    e.stopPropagation();
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredSessions.forEach(s => next.delete(s.id));
+        return next;
+      });
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredSessions.forEach(s => next.add(s.id));
+        return next;
+      });
+    }
+  };
 
   return (
     <div>
@@ -210,7 +236,16 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
         <table className="text-sm">
           <thead className="bg-gray-900 border-b border-gray-700">
             <tr>
-              <th className="py-1.5 px-2 w-6"></th>
+              <th className="py-1.5 px-2 w-6" onClick={(e) => e.stopPropagation()}>
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  className="accent-blue-500 cursor-pointer"
+                  title="Select all"
+                />
+              </th>
               <SortTh col="date">Date</SortTh>
               <SortTh col="duration" align="right">Duration</SortTh>
               <SortTh col="launches" align="center">Launches</SortTh>
