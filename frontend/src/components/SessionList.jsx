@@ -9,7 +9,6 @@ import { apiFetch } from '../utils/api';
 export default function SessionList({ sessions, onSessionClick, initialSelectedDate = 'all', onSessionDeleted, page = 0, pageSize, totalCount, onPageChange }) {
   const [editingSession, setEditingSession] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const selectAllRef = useRef(null);
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
@@ -45,15 +44,6 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
     setSelectedIds(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = (e) => {
-    const checked = e.target.checked;
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      filteredSessions.forEach(s => checked ? next.add(s.id) : next.delete(s.id));
       return next;
     });
   };
@@ -159,13 +149,6 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
     return filtered;
   }, [sessions, availableDates, selectedDate, sortColumn, sortDirection]);
 
-  const allSelected = filteredSessions.length > 0 && filteredSessions.every(s => selectedIds.has(s.id));
-  const someSelected = !allSelected && filteredSessions.some(s => selectedIds.has(s.id));
-
-  useEffect(() => {
-    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
-  }, [someSelected]);
-
   const SortTh = ({ col, align = 'left', width = '', className = '', children }) => (
     <th
       className={`text-${align} py-1.5 px-2 text-sm font-semibold text-gray-300 cursor-pointer hover:text-white ${width} ${className}`}
@@ -192,6 +175,33 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
   const rangeEnd = hasPagination ? Math.min((page + 1) * pageSize, totalCount) : 0;
   const canGoPrev = hasPagination && page > 0;
   const canGoNext = hasPagination && rangeEnd < totalCount;
+
+  const allSelected = filteredSessions.length > 0 && filteredSessions.every(s => selectedIds.has(s.id));
+  const someSelected = !allSelected && filteredSessions.some(s => selectedIds.has(s.id));
+
+  const selectAllRef = useRef(null);
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected;
+    }
+  }, [someSelected]);
+
+  const toggleSelectAll = (e) => {
+    e.stopPropagation();
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredSessions.forEach(s => next.delete(s.id));
+        return next;
+      });
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredSessions.forEach(s => next.add(s.id));
+        return next;
+      });
+    }
+  };
 
   return (
     <div>
@@ -254,7 +264,7 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
         <table className="text-sm">
           <thead className="bg-gray-900 border-b border-gray-700">
             <tr>
-              <th className="py-1.5 px-2 w-6">
+              <th className="py-1.5 px-2 w-6" onClick={(e) => e.stopPropagation()}>
                 <input
                   ref={selectAllRef}
                   type="checkbox"
