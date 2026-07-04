@@ -265,6 +265,32 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
     if session_records[session_number].launch_count != 0:
         session_records[session_number].thermal_launch_ratio = session_records[session_number].thermal_count / session_records[session_number].launch_count
 
+def refine_thermal_markers(thermal_records, vario_records, search_window=5):
+    """Refine thermal start/end timestamps to local raw-altitude extrema.
+    For each thermal end (peak) find the raw max within ±search_window samples.
+    For each thermal start (trough/launch) find the raw min within ±search_window samples.
+    Updates start_time, end_time, start_altitude, end_altitude, and altitude_gain in place.
+    """
+    n = len(vario_records)
+    for t in thermal_records:
+        # Refine end (peak) → local raw max
+        ei = t['end_index']
+        lo, hi = max(0, ei - search_window), min(n - 1, ei + search_window)
+        best_i = max(range(lo, hi + 1), key=lambda i: vario_records[i].altitude)
+        t['end_time'] = round(vario_records[best_i].timestamp, 1)
+        t['end_altitude'] = round(vario_records[best_i].altitude, 1)
+        t['end_index'] = best_i
+
+        # Refine start (trough/launch) → local raw min, biased forward to avoid early dips
+        si = t['start_index']
+        lo, hi = max(0, si - 2), min(n - 1, si + search_window)
+        best_i = min(range(lo, hi + 1), key=lambda i: vario_records[i].altitude)
+        t['start_time'] = round(vario_records[best_i].timestamp, 1)
+        t['start_altitude'] = round(vario_records[best_i].altitude, 1)
+        t['start_index'] = best_i
+
+        t['altitude_gain'] = round(t['end_altitude'] - t['start_altitude'], 1)
+
 def extract_model_name_from_header(header_data):
     """Extract aircraft model name from header packet if it contains model info"""
     if len(header_data) >= 13:
@@ -322,12 +348,19 @@ def process_tlm_file(file_obj, is_metric=False):
     
     def finalize_session():
         """Smooth and analyze the current session's vario records, then save them."""
+        # Guard against being called before any session has started, or more than
+        # once for the same session_number (e.g. a header block with no vario
+        # packets) — session_vario_records must stay index-aligned with session_records.
+        if session_number < 0 or len(session_vario_records) != session_number:
+            return
         if len(vario_records) > 0:
             smooth_altitude_readings(vario_records)
             identify_thermal_peaks(vario_records, session_records, session_number)
             identify_launch_peaks(vario_records, session_records, session_number)
             identify_trough_bottoms(vario_records, session_number)
             identify_caught_thermals(vario_records, session_records, session_number, thermal_records)
+            session_thermals = [t for t in thermal_records if t['session_number'] == session_number]
+            refine_thermal_markers(session_thermals, vario_records)
         # Always save (even if empty) so index stays aligned with session_records
         session_vario_records.append(list(vario_records))
 
@@ -363,7 +396,7 @@ def process_tlm_file(file_obj, is_metric=False):
             time_stamp_hundreths = struct.unpack('<I', time_stamp_hundreths_bytes)[0]
             
             # Check if we've reached another header block
-            if time_stamp_hundreths == 0xFFFFFFFF and len(vario_records) > 0:
+            if time_stamp_hundreths == 0xFFFFFFFF:
                 finalize_session()
             
             if time_stamp_hundreths == 0xFFFFFFFF:
@@ -405,16 +438,15 @@ def process_tlm_file(file_obj, is_metric=False):
                     delta_1000ms_bytes = f.read(2)
                     f.read(6)  # remaining deltas
                     
-                    altitude = struct.unpack('>H', altitude_bytes)[0] / 10.0 * M_TO_FT
+                    altitude = struct.unpack('>h', altitude_bytes)[0] / 10.0 * M_TO_FT
                     delta_1000ms = struct.unpack('>h', delta_1000ms_bytes)[0] / 10.0 * M_TO_FT
                     # Handle 32-bit counter wraparound
                     raw_delta = time_stamp_hundreths - timestamp_offset_hundreths
                     if raw_delta < 0:
                         raw_delta += 0x100000000  # 2^32
                     delta_timestamp = raw_delta / 100.0
-                    
-                    if altitude < 1000:  # Only valid data
-                        vario_records.append(VarioRecord(delta_timestamp, altitude, delta_1000ms))
+
+                    vario_records.append(VarioRecord(delta_timestamp, altitude, delta_1000ms))
                 else:
                     f.read(15)
                 vario_packet_count += 1
@@ -499,7 +531,7 @@ def process_tlm_file(file_obj, is_metric=False):
             altitude_data = [
                 {
                     'timestamp': r.timestamp,
-                    'altitude': round(r.altitude_smoothed / (M_TO_FT if is_metric else 1), 1),
+                    'altitude': round(r.altitude / (M_TO_FT if is_metric else 1), 1),
                     'climb_rate': round(r.climb_rate / (M_TO_FT if is_metric else 1), 1),
                     'thermal_start': any(abs(r.timestamp - t) < 0.6 for t in thermal_start_times),
                     'thermal_end': any(abs(r.timestamp - t) < 0.6 for t in thermal_end_times),

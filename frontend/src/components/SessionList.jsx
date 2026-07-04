@@ -1,14 +1,15 @@
-import { useState, useMemo } from 'react';
-import { ChevronUp, ChevronDown, Trash2, MapPin, MoveUp } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Trash2, MapPin, MoveUp } from 'lucide-react';
 import { formatDateShort } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
 import LocationEditModal from './LocationEditModal';
 import { WeatherIcon } from '../utils/weatherIcon';
 import { apiFetch } from '../utils/api';
 
-export default function SessionList({ sessions, onSessionClick, initialSelectedDate = 'all', onSessionDeleted }) {
+export default function SessionList({ sessions, onSessionClick, initialSelectedDate = 'all', onSessionDeleted, page = 0, pageSize, totalCount, onPageChange }) {
   const [editingSession, setEditingSession] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const selectAllRef = useRef(null);
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [sortColumn, setSortColumn] = useState(null);
   const [sortDirection, setSortDirection] = useState('asc');
@@ -44,6 +45,15 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
     setSelectedIds(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (e) => {
+    const checked = e.target.checked;
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      filteredSessions.forEach(s => checked ? next.add(s.id) : next.delete(s.id));
       return next;
     });
   };
@@ -149,6 +159,13 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
     return filtered;
   }, [sessions, availableDates, selectedDate, sortColumn, sortDirection]);
 
+  const allSelected = filteredSessions.length > 0 && filteredSessions.every(s => selectedIds.has(s.id));
+  const someSelected = !allSelected && filteredSessions.some(s => selectedIds.has(s.id));
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
   const SortTh = ({ col, align = 'left', width = '', className = '', children }) => (
     <th
       className={`text-${align} py-1.5 px-2 text-sm font-semibold text-gray-300 cursor-pointer hover:text-white ${width} ${className}`}
@@ -170,6 +187,11 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
   }
 
   const hasSelection = selectedIds.size > 0;
+  const hasPagination = pageSize && totalCount > pageSize;
+  const rangeStart = hasPagination ? page * pageSize + 1 : 0;
+  const rangeEnd = hasPagination ? Math.min((page + 1) * pageSize, totalCount) : 0;
+  const canGoPrev = hasPagination && page > 0;
+  const canGoNext = hasPagination && rangeEnd < totalCount;
 
   return (
     <div>
@@ -183,6 +205,28 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
             <option key={date} value={date}>{date === 'all' ? 'All Dates' : date}</option>
           ))}
         </select>
+
+        {hasPagination && (
+          <div className="flex items-center gap-2 text-sm text-gray-400 ml-auto">
+            <span>{rangeStart}–{rangeEnd} of {totalCount}</span>
+            <button
+              onClick={() => onPageChange(page - 1)}
+              disabled={!canGoPrev}
+              className="p-1 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition"
+              title="Previous 100"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button
+              onClick={() => onPageChange(page + 1)}
+              disabled={!canGoNext}
+              className="p-1 rounded hover:bg-gray-700 disabled:opacity-30 disabled:hover:bg-transparent transition"
+              title="Next 100"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+        )}
 
         {hasSelection && (
           <>
@@ -210,7 +254,16 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
         <table className="text-sm">
           <thead className="bg-gray-900 border-b border-gray-700">
             <tr>
-              <th className="py-1.5 px-2 w-6"></th>
+              <th className="py-1.5 px-2 w-6">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  className="accent-blue-500 cursor-pointer"
+                  title={allSelected ? 'Deselect all' : 'Select all'}
+                />
+              </th>
               <SortTh col="date">Date</SortTh>
               <SortTh col="duration" align="right">Duration</SortTh>
               <SortTh col="launches" align="center">Launches</SortTh>

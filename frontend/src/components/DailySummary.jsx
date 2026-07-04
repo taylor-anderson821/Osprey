@@ -204,8 +204,8 @@ export default function DailySummary({ onDateClick }) {
             <YAxis stroke="#9ca3af" width={50}
               tickFormatter={(v) => v.toLocaleString()} ticks={yAxisTicks} domain={[0, 'auto']} tick={{ fontSize: 11 }} />
             <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff' }}
-              formatter={(v) => v.toLocaleString()} />
-            <Bar dataKey="gain" fill="#ef4444" name={`Thermal Gain (${unitLabel})`} />
+              formatter={(v) => v.toLocaleString()} isAnimationActive={false} />
+            <Bar dataKey="gain" fill="#ef4444" name={`Thermal Gain (${unitLabel})`} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -224,8 +224,8 @@ export default function DailySummary({ onDateClick }) {
             <XAxis dataKey="date" stroke="#9ca3af" tick={{ fontSize: 11 }} />
             <YAxis stroke="#9ca3af" width={35} domain={[0, 50]} tick={{ fontSize: 11 }} />
             <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff' }}
-              formatter={(v) => `${v}%`} />
-            <Bar dataKey="percentage" fill="#3b82f6" name="Thermal Duration %" />
+              formatter={(v) => `${v}%`} isAnimationActive={false} />
+            <Bar dataKey="percentage" fill="#3b82f6" name="Thermal Duration %" isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
       </div>

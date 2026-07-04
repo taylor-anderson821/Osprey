@@ -49,20 +49,29 @@ function SessionDetailWrapper({ sessions, onSessionChange }) {
   );
 }
 
+const SESSIONS_PAGE_SIZE = 100;
+
 export default function DesktopApp() {
   const [sessions, setSessions] = useState([]);
   const [selectedDate, setSelectedDate] = useState('all');
+  const [sessionsPage, setSessionsPage] = useState(0);
+  const [totalSessions, setTotalSessions] = useState(0);
   const { user, logout } = useAuth();
   const isAdmin = user?.role === 'admin';
   const navigate = useNavigate();
   const location = useLocation();
 
-  const fetchSessions = async () => {
+  const fetchSessions = async (page = sessionsPage) => {
     try {
-      const response = await apiFetch('/api/sessions');
+      const response = await apiFetch(`/api/sessions?skip=${page * SESSIONS_PAGE_SIZE}&limit=${SESSIONS_PAGE_SIZE}`);
       if (response.ok) {
         const data = await response.json();
         setSessions(data);
+      }
+      const countResponse = await apiFetch('/api/sessions/count');
+      if (countResponse.ok) {
+        const { total } = await countResponse.json();
+        setTotalSessions(total);
       }
     } catch (error) {
       console.error('Error fetching sessions:', error);
@@ -71,13 +80,18 @@ export default function DesktopApp() {
 
   useEffect(() => {
     if (user) {
-      fetchSessions();
+      fetchSessions(sessionsPage);
     }
-  }, [user]);
+  }, [user, sessionsPage]);
 
   const handleUploadSuccess = () => {
-    fetchSessions();
+    setSessionsPage(0);
+    fetchSessions(0);
     navigate('/sessions');
+  };
+
+  const handleSessionsPageChange = (page) => {
+    setSessionsPage(page);
   };
 
   const handleSessionClick = (sessionId) => {
@@ -207,7 +221,7 @@ export default function DesktopApp() {
       <main className="container mx-auto px-4 py-8">
         <Routes>
           <Route path="/" element={<Navigate to="/profile" replace />} />
-          <Route path="/sessions" element={<SessionList sessions={sessions} onSessionClick={handleSessionClick} initialSelectedDate={selectedDate} onSessionDeleted={fetchSessions} />} />
+          <Route path="/sessions" element={<SessionList sessions={sessions} onSessionClick={handleSessionClick} initialSelectedDate={selectedDate} onSessionDeleted={fetchSessions} page={sessionsPage} pageSize={SESSIONS_PAGE_SIZE} totalCount={totalSessions} onPageChange={handleSessionsPageChange} />} />
           <Route path="/sessions/:sessionId" element={<SessionDetailWrapper sessions={sessions} onSessionChange={handleSessionClick} />} />
           <Route path="/daily" element={<DailySummary onDateClick={(date) => { setSelectedDate(date); navigate('/sessions'); }} />} />
           <Route path="/upload" element={<FileUpload onSuccess={handleUploadSuccess} />} />

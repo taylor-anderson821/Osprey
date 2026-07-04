@@ -239,6 +239,17 @@ def get_sessions(
         .all()
     return sessions
 
+@app.get("/api/sessions/count")
+def get_sessions_count(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get total session count for the authenticated user, for pagination"""
+    total = db.query(func.count(models.FlightSession.id))\
+        .filter(models.FlightSession.user_id == current_user.id)\
+        .scalar()
+    return {"total": total}
+
 @app.get("/api/sessions-with-thermals", response_model=List[schemas.SessionDetail])
 def get_sessions_with_thermals(
     current_user: models.User = Depends(auth.get_current_user),

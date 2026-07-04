@@ -12,7 +12,7 @@ const CustomTooltip = ({ active, payload, label, unitLabel }) => {
     if (altitudeData) {
       return (
         <div style={{ backgroundColor: 'white', border: '1px solid #ccc', padding: '10px' }}>
-          <p style={{ margin: 0, fontSize: '12px' }}>{`Time: ${Math.round(label)} s`}</p>
+          <p style={{ margin: 0, fontSize: '12px' }}>{(() => { const t = Math.round(label); const m = Math.floor(t / 60); const s = t % 60; return `Time: ${m}:${s.toString().padStart(2, '0')}`; })()}</p>
           <p style={{ margin: 0, fontSize: '12px', color: '#3b82f6' }}>
             {`Altitude: ${Math.round(altitudeData.value)} ${unitLabel}`}
           </p>
