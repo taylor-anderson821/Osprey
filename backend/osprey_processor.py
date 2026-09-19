@@ -18,6 +18,11 @@ LAUNCH_MIN_CLIMB_RATE_LOOKBACK = 5
 TROUGH_CANDIDATE_WINDOW = 10
 SESSION_MINIMUM_DURATION = 30
 M_TO_FT = 3.28084
+# A real thermal's raw climb rate is turbulent — brief, isolated spikes. A powered climb
+# sustains several consecutive samples above this rate. Calibrated against known-good
+# thermals (max observed sustained run: 3 samples) vs. known-bogus ones (9+ samples).
+SUSTAINED_POWERED_CLIMB_RATE_FPS = 10
+SUSTAINED_POWERED_CLIMB_RUN = 5
 
 class VarioRecord:
     def __init__(self, timestamp, altitude, climb_rate):
@@ -73,10 +78,17 @@ def identify_thermal_peaks(vario_records, session_records, session_number):
             
             if vario_records[i].altitude_smoothed == maximum_thermal_peak:
                 vario_records[i].thermal_peak = True
-                # Disqualify if associated with high climb rate (launch)
+                # Disqualify if associated with high climb rate — this is a powered climb,
+                # not a thermal. Mark it as a launch/powered-climb boundary instead of just
+                # dropping it, so the backward search in identify_caught_thermals stops here
+                # rather than walking straight through it and merging separate climbs (that
+                # happen to straddle a powered burst too fast to be a thermal but not sustained
+                # enough to trip the launch detector's own climb-rate threshold) into one thermal.
                 if (vario_records[i].altitude_smoothed - vario_records[i - THERMAL_MAX_CLIMB_RATE_LOOKBACK].altitude_smoothed
                     > THERMAL_MAX_CLIMB_RATE_FPS * THERMAL_MAX_CLIMB_RATE_LOOKBACK):
                     vario_records[i].thermal_peak = False
+                    vario_records[i].launch_peak = True
+                    session_records[session_number].launch_count += 1
 
 def identify_launch_peaks(vario_records, session_records, session_number):
     """Identifies launch peaks using original logic"""
@@ -110,6 +122,19 @@ def identify_trough_bottoms(vario_records, session_number):
             if vario_records[i].altitude_smoothed == minimum_trough_bottom:
                 vario_records[i].trough_bottom = True
 
+def _contains_sustained_powered_climb(vario_records, start_index, end_index):
+    """True if a candidate thermal span contains a sustained powered-climb burst
+    rather than genuine (turbulent, spiky) thermal lift."""
+    run = 0
+    for k in range(start_index, end_index + 1):
+        if vario_records[k].climb_rate > SUSTAINED_POWERED_CLIMB_RATE_FPS:
+            run += 1
+            if run >= SUSTAINED_POWERED_CLIMB_RUN:
+                return True
+        else:
+            run = 0
+    return False
+
 def identify_caught_thermals(vario_records, session_records, session_number, thermal_records):
     """Identifies caught thermals using original logic"""
     thermal_index = 0
@@ -139,7 +164,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                     duration = round(end_time - start_time, 1)
                     altitude_gain = round(end_altitude - start_altitude, 1)
                     avg_climb_rate = round(altitude_gain / duration, 1) if duration > 0 else 0
-                    if altitude_gain >= THERMAL_MINIMUM_GAIN_FT:
+                    if altitude_gain >= THERMAL_MINIMUM_GAIN_FT and not _contains_sustained_powered_climb(vario_records, j, i):
                         thermal_records.append({
                             'session_number': session_number,
                             'thermal_number': thermal_index,
@@ -169,7 +194,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                         duration = round(end_time - start_time, 1)
                         altitude_gain = round(end_altitude - start_altitude, 1)
                         avg_climb_rate = round(altitude_gain / duration, 1) if duration > 0 else 0
-                        if altitude_gain >= THERMAL_MINIMUM_GAIN_FT:
+                        if altitude_gain >= THERMAL_MINIMUM_GAIN_FT and not _contains_sustained_powered_climb(vario_records, last_trough_bottom_index, i):
                             thermal_records.append({
                                 'session_number': session_number,
                                 'thermal_number': thermal_index,
@@ -202,7 +227,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                     duration = round(end_time - start_time, 1)
                     altitude_gain = round(end_altitude - start_altitude, 1)
                     avg_climb_rate = round(altitude_gain / duration, 1) if duration > 0 else 0
-                    if altitude_gain >= THERMAL_MINIMUM_GAIN_FT:
+                    if altitude_gain >= THERMAL_MINIMUM_GAIN_FT and not _contains_sustained_powered_climb(vario_records, last_trough_bottom_index, i):
                         thermal_records.append({
                             'session_number': session_number,
                             'thermal_number': thermal_index,
@@ -231,7 +256,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                     duration = round(end_time - start_time, 1)
                     altitude_gain = round(end_altitude - start_altitude, 1)
                     avg_climb_rate = round(altitude_gain / duration, 1) if duration > 0 else 0
-                    if altitude_gain >= THERMAL_MINIMUM_GAIN_FT:
+                    if altitude_gain >= THERMAL_MINIMUM_GAIN_FT and not _contains_sustained_powered_climb(vario_records, last_trough_bottom_index, i):
                         thermal_records.append({
                             'session_number': session_number,
                             'thermal_number': thermal_index,
@@ -269,7 +294,8 @@ def refine_thermal_markers(thermal_records, vario_records, search_window=5):
     """Refine thermal start/end timestamps to local raw-altitude extrema.
     For each thermal end (peak) find the raw max within ±search_window samples.
     For each thermal start (trough/launch) find the raw min within ±search_window samples.
-    Updates start_time, end_time, start_altitude, end_altitude, and altitude_gain in place.
+    Updates start_time, end_time, start_altitude, end_altitude, altitude_gain,
+    duration, and avg_climb_rate in place, consistent with the refined markers.
     """
     n = len(vario_records)
     for t in thermal_records:
@@ -283,13 +309,32 @@ def refine_thermal_markers(thermal_records, vario_records, search_window=5):
 
         # Refine start (trough/launch) → local raw min, biased forward to avoid early dips
         si = t['start_index']
-        lo, hi = max(0, si - 2), min(n - 1, si + search_window)
+        if vario_records[si].launch_peak:
+            # Launch-based start: raw altitude only rises through the climb-out
+            # leading up to this point, so any backward search would just walk
+            # back into the excluded powered climb and drag the start earlier.
+            lo, hi = si, min(n - 1, si + search_window)
+        else:
+            # Trough-based start: altitude_smoothed is a trailing moving average,
+            # so its minimum lags the true raw-altitude bottom — sometimes by
+            # more than a couple of samples. Walk backward over the raw signal
+            # while it keeps descending (or holding flat) to find the actual
+            # bottom of this descent, then still allow the existing forward
+            # search in case the true minimum sits a little later instead.
+            walkback = si
+            j = si - 1
+            while j >= 0 and vario_records[j].altitude <= vario_records[walkback].altitude:
+                walkback = j
+                j -= 1
+            lo, hi = walkback, min(n - 1, si + search_window)
         best_i = min(range(lo, hi + 1), key=lambda i: vario_records[i].altitude)
         t['start_time'] = round(vario_records[best_i].timestamp, 1)
         t['start_altitude'] = round(vario_records[best_i].altitude, 1)
         t['start_index'] = best_i
 
         t['altitude_gain'] = round(t['end_altitude'] - t['start_altitude'], 1)
+        t['duration'] = round(t['end_time'] - t['start_time'], 1)
+        t['avg_climb_rate'] = round(t['altitude_gain'] / t['duration'], 1) if t['duration'] > 0 else 0
 
 def extract_model_name_from_header(header_data):
     """Extract aircraft model name from header packet if it contains model info"""

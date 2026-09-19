@@ -54,7 +54,9 @@ export default function MobileApp() {
 
   const fetchSessions = async () => {
     try {
-      const response = await apiFetch('/api/sessions');
+      const countResponse = await apiFetch('/api/sessions/count');
+      const total = countResponse.ok ? (await countResponse.json()).total : 50;
+      const response = await apiFetch(`/api/sessions?limit=${total}`);
       if (response.ok) {
         const data = await response.json();
         setSessions(data);
