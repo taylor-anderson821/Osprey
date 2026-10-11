@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -19,6 +19,7 @@ from osprey_processor import process_tlm_file
 app = FastAPI(title="Osprey Flight Analytics API")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+DEFAULT_UPLOAD_LOCATION_NAME = "SRQ Flying Squadron"
 
 app.add_middleware(
     CORSMiddleware,
@@ -167,6 +168,7 @@ def health_check():
 @app.post("/api/upload", response_model=schemas.UploadResponse)
 async def upload_tlm_file(
     file: UploadFile = File(...),
+    location_id: Optional[int] = Form(None),
     current_user: models.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -178,6 +180,23 @@ async def upload_tlm_file(
     file_obj = io.BytesIO(contents)
 
     result = process_tlm_file(file_obj, is_metric=False)
+
+    if location_id:
+        default_location = db.query(models.FlyingLocation).filter(
+            models.FlyingLocation.id == location_id
+        ).first()
+        default_location_id = default_location.id if default_location else None
+    else:
+        default_location_id = current_user.home_location_id
+        default_location = current_user.home_location
+
+    if not default_location_id:
+        fallback = db.query(models.FlyingLocation).filter(
+            models.FlyingLocation.name == DEFAULT_UPLOAD_LOCATION_NAME
+        ).first()
+        if fallback:
+            default_location_id = fallback.id
+            default_location = fallback
 
     session_ids = []
     for session_data in result['sessions']:
@@ -193,14 +212,14 @@ async def upload_tlm_file(
             altitude_data=session_data['altitude_data'],
             aircraft_model=session_data.get('aircraft_model')
         )
-        if current_user.home_location_id:
-            db_session.location_id = current_user.home_location_id
+        if default_location_id:
+            db_session.location_id = default_location_id
         db.add(db_session)
         db.flush()
         session_ids.append(db_session.id)
 
-        if current_user.home_location_id:
-            store_weather_on_session(db_session, fallback_location=current_user.home_location)
+        if default_location_id:
+            store_weather_on_session(db_session, fallback_location=default_location)
 
         for thermal_data in session_data['thermals']:
             db_thermal = models.Thermal(

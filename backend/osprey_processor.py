@@ -87,7 +87,12 @@ def identify_thermal_peaks(vario_records, session_records, session_number):
                 if (vario_records[i].altitude_smoothed - vario_records[i - THERMAL_MAX_CLIMB_RATE_LOOKBACK].altitude_smoothed
                     > THERMAL_MAX_CLIMB_RATE_FPS * THERMAL_MAX_CLIMB_RATE_LOOKBACK):
                     vario_records[i].thermal_peak = False
-                    vario_records[i].launch_peak = True
+                    # altitude_smoothed is a trailing moving average, so its peak
+                    # lags the true raw-altitude apex — refine to the local raw max
+                    # (chart plots raw altitude).
+                    lo = max(0, i - ALTITUDE_MOVING_AVG_WINDOW)
+                    launch_index = max(range(lo, i + 1), key=lambda k: vario_records[k].altitude)
+                    vario_records[launch_index].launch_peak = True
                     session_records[session_number].launch_count += 1
 
 def identify_launch_peaks(vario_records, session_records, session_number):
@@ -102,8 +107,36 @@ def identify_launch_peaks(vario_records, session_records, session_number):
     
     for i in range(LAUNCH_MIN_CLIMB_RATE_LOOKBACK, len(vario_records) - LAUNCH_MIN_CLIMB_RATE_LOOKBACK):
         if not vario_records[i].launch_peak_candidate and vario_records[i - 1].launch_peak_candidate:
-            vario_records[i].launch_peak = True
+            # The candidate run trails the actual altitude apex by design — it
+            # stays "candidate" for LOOKBACK samples after the last qualifying
+            # climb rate — so find the true peak altitude within the run
+            # instead of marking its tail end.
+            run_start = i - 1
+            while run_start > 0 and vario_records[run_start - 1].launch_peak_candidate:
+                run_start -= 1
+            peak_index = max(range(run_start, i), key=lambda k: vario_records[k].altitude_smoothed)
+            # altitude_smoothed is a trailing moving average, so even the true
+            # peak-of-the-run lags the actual raw-altitude apex by up to
+            # ALTITUDE_MOVING_AVG_WINDOW samples. The chart plots raw altitude,
+            # so refine to the local raw max (same idea as refine_thermal_markers).
+            lo = max(0, peak_index - ALTITUDE_MOVING_AVG_WINDOW)
+            peak_index = max(range(lo, peak_index + 1), key=lambda k: vario_records[k].altitude)
+            vario_records[peak_index].launch_peak = True
             session_records[session_number].launch_count += 1
+
+def merge_adjacent_launch_peaks(vario_records, session_records, session_number):
+    """Collapse launch_peak flags that stem from the same physical launch.
+    A disqualified thermal peak (identify_thermal_peaks) and the climb-rate
+    candidate dropout (identify_launch_peaks) can both fire for one powered
+    climb, a few samples apart. Keep only the earliest (the true apex)."""
+    last_launch_index = None
+    for i in range(len(vario_records)):
+        if vario_records[i].launch_peak:
+            if last_launch_index is not None and i - last_launch_index <= LAUNCH_MIN_CLIMB_RATE_LOOKBACK:
+                vario_records[i].launch_peak = False
+                session_records[session_number].launch_count -= 1
+            else:
+                last_launch_index = i
 
 def identify_trough_bottoms(vario_records, session_number):
     """Identifies trough bottoms using original logic"""
@@ -402,6 +435,7 @@ def process_tlm_file(file_obj, is_metric=False):
             smooth_altitude_readings(vario_records)
             identify_thermal_peaks(vario_records, session_records, session_number)
             identify_launch_peaks(vario_records, session_records, session_number)
+            merge_adjacent_launch_peaks(vario_records, session_records, session_number)
             identify_trough_bottoms(vario_records, session_number)
             identify_caught_thermals(vario_records, session_records, session_number, thermal_records)
             session_thermals = [t for t in thermal_records if t['session_number'] == session_number]
@@ -580,6 +614,7 @@ def process_tlm_file(file_obj, is_metric=False):
                     'climb_rate': round(r.climb_rate / (M_TO_FT if is_metric else 1), 1),
                     'thermal_start': any(abs(r.timestamp - t) < 0.6 for t in thermal_start_times),
                     'thermal_end': any(abs(r.timestamp - t) < 0.6 for t in thermal_end_times),
+                    'launch_peak': r.launch_peak,
                 }
                 for r in records
             ]

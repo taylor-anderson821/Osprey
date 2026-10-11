@@ -91,10 +91,17 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
   };
 
   const availableDates = useMemo(() => {
-    const dates = sessions.map(s =>
-      new Date(s.start_time).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })
-    );
-    return ['all', ...new Set(dates)];
+    const byDate = new Map();
+    sessions.forEach(s => {
+      const d = new Date(s.start_time);
+      const key = d.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' });
+      const dayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      if (!byDate.has(key)) byDate.set(key, dayStart);
+    });
+    const sortedDates = [...byDate.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .map(([key]) => key);
+    return ['all', ...sortedDates];
   }, [sessions]);
 
   const sessionDayNumbers = useMemo(() => {
@@ -260,7 +267,7 @@ export default function SessionList({ sessions, onSessionClick, initialSelectedD
       </div>
 
       <div className="overflow-x-auto w-full">
-      <div className="bg-gray-800 rounded-lg shadow overflow-hidden border border-gray-700 inline-block min-w-full">
+      <div className="bg-gray-800 rounded-lg shadow overflow-hidden border border-gray-700 inline-block">
         <table className="text-sm">
           <thead className="bg-gray-900 border-b border-gray-700">
             <tr>

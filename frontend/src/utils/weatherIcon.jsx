@@ -1,9 +1,9 @@
-import { Sun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog } from 'lucide-react';
+import { Sun, CloudSun, Cloud, CloudRain, CloudSnow, CloudLightning, CloudDrizzle, CloudFog } from 'lucide-react';
 
 const conditionIconMap = {
   'Clear sky':               Sun,
   'Mainly clear':            Sun,
-  'Partly cloudy':           Cloud,
+  'Partly cloudy':           CloudSun,
   'Overcast':                Cloud,
   'Foggy':                   CloudFog,
   'Icy fog':                 CloudFog,
@@ -26,7 +26,7 @@ const conditionIconMap = {
 const conditionColorMap = {
   'Clear sky':                  'text-yellow-300',
   'Mainly clear':               'text-yellow-300',
-  'Partly cloudy':              'text-gray-400',
+  'Partly cloudy':              'text-yellow-300',
   'Overcast':                   'text-gray-400',
   'Foggy':                      'text-gray-400',
   'Icy fog':                    'text-gray-400',

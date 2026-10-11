@@ -20,6 +20,7 @@ export default function FileUpload({ onSuccess }) {
 
   useEffect(() => {
     fetchLocations();
+    fetchDefaultLocation();
   }, []);
 
   const fetchLocations = async () => {
@@ -29,6 +30,18 @@ export default function FileUpload({ onSuccess }) {
       setLocations(data);
     } catch (error) {
       console.error('Error fetching locations:', error);
+    }
+  };
+
+  const fetchDefaultLocation = async () => {
+    try {
+      const response = await apiFetch('/api/auth/me');
+      const data = await response.json();
+      if (data.home_location_id) {
+        setSelectedLocation(String(data.home_location_id));
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
     }
   };
 
@@ -77,6 +90,9 @@ export default function FileUpload({ onSuccess }) {
 
     const formData = new FormData();
     formData.append('file', file);
+    if (selectedLocation) {
+      formData.append('location_id', selectedLocation);
+    }
 
     try {
       const response = await apiFetch('/api/upload', {

@@ -1,9 +1,24 @@
 import { ChevronLeft, ChevronRight, MoveUp, Wind } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceArea } from 'recharts';
 import { formatSessionDetailDate } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
 import { WeatherIcon } from '../utils/weatherIcon';
+
+const tooltipBoxStyle = {
+  backgroundColor: '#111827',
+  border: '1px solid #374151',
+  borderRadius: '8px',
+  padding: '8px 10px',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
+};
+
+const formatTooltipTime = (label) => {
+  const t = Math.round(label);
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
 
 const CustomTooltip = ({ active, payload, label, unitLabel }) => {
   if (active && payload && payload.length) {
@@ -11,9 +26,9 @@ const CustomTooltip = ({ active, payload, label, unitLabel }) => {
     const altitudeData = payload.find(p => p.dataKey === 'altitude' && p.payload.climb_rate !== undefined);
     if (altitudeData) {
       return (
-        <div style={{ backgroundColor: 'white', border: '1px solid #ccc', padding: '10px' }}>
-          <p style={{ margin: 0, fontSize: '12px' }}>{(() => { const t = Math.round(label); const m = Math.floor(t / 60); const s = t % 60; return `Time: ${m}:${s.toString().padStart(2, '0')}`; })()}</p>
-          <p style={{ margin: 0, fontSize: '12px', color: '#3b82f6' }}>
+        <div style={tooltipBoxStyle}>
+          <p style={{ margin: 0, marginBottom: '3px', fontSize: '12px', color: '#9ca3af' }}>{formatTooltipTime(label)}</p>
+          <p style={{ margin: 0, fontSize: '12px', color: '#60a5fa' }}>
             {`Altitude: ${Math.round(altitudeData.value)} ${unitLabel}`}
           </p>
         </div>
@@ -25,7 +40,25 @@ const CustomTooltip = ({ active, payload, label, unitLabel }) => {
 
 export default function SessionDetail({ session, sessions, onBack, onSessionChange }) {
   const [hoveredThermal, setHoveredThermal] = useState(null);
+  const [zoomDomain, setZoomDomain] = useState(null);
+  const [refAreaLeft, setRefAreaLeft] = useState(null);
+  const [refAreaRight, setRefAreaRight] = useState(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const chartWrapperRef = useRef(null);
+  // Pan-gesture snapshot (pixel start position, domain, plot width at drag
+  // start) lives in a ref rather than state: it's read from window-level
+  // listeners and must never trigger its own re-render.
+  const panStateRef = useRef(null);
   const unitLabel = getUnitLabel();
+
+  // Reset any active zoom/pan when switching sessions
+  useEffect(() => {
+    setZoomDomain(null);
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+    setIsPanning(false);
+    panStateRef.current = null;
+  }, [session.id]);
 
   const formatDate = formatSessionDetailDate;
 
@@ -100,26 +133,30 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
   const chartData = session.altitude_data.map(point => ({
     timestamp: point.timestamp,
     altitude: formatAltitudeValue(point.altitude),
-    climb_rate: point.climb_rate
+    climb_rate: point.climb_rate,
+    launch_peak: point.launch_peak
   }));
 
   // Build sets of thermal start/end timestamps for fast lookup
   const thermalStartTimes = new Set(session.thermals.map(t => t.start_time));
   const thermalEndTimes = new Set(session.thermals.map(t => t.end_time));
 
-  // Create a custom dot renderer that shows thermal markers
+  // Create a custom dot renderer that shows thermal + launch markers
   // Match by timestamp only (within 0.6s tolerance to handle float precision between passes)
   const renderCustomDot = (props) => {
     const { cx, cy, payload } = props;
-    
+
     const isThermalStart = [...thermalStartTimes].some(t => Math.abs(t - payload.timestamp) < 0.6);
     const isThermalEnd = [...thermalEndTimes].some(t => Math.abs(t - payload.timestamp) < 0.6);
-    
+
     if (isThermalStart) {
       return <circle cx={cx} cy={cy} r={6} fill="#10b981" stroke="none" />;
     }
     if (isThermalEnd) {
       return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
+    }
+    if (payload.launch_peak) {
+      return <circle cx={cx} cy={cy} r={6} fill="#fbbf24" stroke="none" />;
     }
     return null;
   };
@@ -127,19 +164,36 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
   // Calculate X-axis domain from altitude data only (not scatter points)
   const minTime = Math.min(...chartData.map(d => d.timestamp));
   const maxTime = Math.max(...chartData.map(d => d.timestamp));
-  
-  // Calculate evenly spaced tick marks
-  const timeRange = maxTime - minTime;
-  const tickInterval = timeRange > 600 ? 100 : timeRange > 300 ? 50 : timeRange > 100 ? 20 : 10;
-  const startTick = Math.ceil(minTime / tickInterval) * tickInterval;
+
+  // When zoomed, restrict the displayed domain and both axes' tick ranges to
+  // the selected window instead of the full session.
+  const displayMinTime = zoomDomain ? zoomDomain[0] : minTime;
+  const displayMaxTime = zoomDomain ? zoomDomain[1] : maxTime;
+  const visibleData = zoomDomain
+    ? chartData.filter(d => d.timestamp >= displayMinTime && d.timestamp <= displayMaxTime)
+    : chartData;
+
+  // Calculate evenly spaced tick marks. Snapped to whole minutes (1, 2, 5, or
+  // 10 min) at the full session view; finer second-based steps kick in once
+  // zoomed into a short enough window that minute ticks would be too sparse.
+  const timeRange = displayMaxTime - displayMinTime;
+  const tickInterval = timeRange > 3000 ? 600
+    : timeRange > 1200 ? 300
+    : timeRange > 600 ? 120
+    : timeRange > 240 ? 60
+    : timeRange > 90 ? 30
+    : timeRange > 40 ? 15
+    : timeRange > 20 ? 10
+    : 5;
+  const startTick = Math.ceil(displayMinTime / tickInterval) * tickInterval;
   const ticks = [];
-  for (let t = startTick; t <= maxTime; t += tickInterval) {
+  for (let t = startTick; t <= displayMaxTime; t += tickInterval) {
     ticks.push(t);
   }
 
   // Calculate Y-axis tick marks with round numbers
-  const minAltitude = Math.min(...chartData.map(d => d.altitude));
-  const maxAltitude = Math.max(...chartData.map(d => d.altitude));
+  const minAltitude = Math.min(...(visibleData.length ? visibleData : chartData).map(d => d.altitude));
+  const maxAltitude = Math.max(...(visibleData.length ? visibleData : chartData).map(d => d.altitude));
   const altitudeRange = maxAltitude - minAltitude;
   
   // Determine appropriate tick interval based on range
@@ -179,6 +233,97 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
       return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
   };
+
+  // Drag-to-zoom on the altitude chart. Once zoomed, plain drag pans instead;
+  // shift+drag draws a new zoom selection to zoom in further.
+  //
+  // Panning tracks raw pixel movement from the native mouse event rather than
+  // Recharts' activeLabel: activeLabel snaps to the nearest data sample AND is
+  // computed against the live axis domain, so once the domain itself starts
+  // moving (as it does every frame of a pan), the same pixel position maps to
+  // a different snapped value on the next frame — a feedback loop that reads
+  // as jitter. Freezing a pixel-to-time scale at drag start avoids that.
+  const handleZoomMouseDown = (chartState, domEvent) => {
+    if (!chartState || chartState.activeLabel == null) return;
+    if (zoomDomain && !domEvent?.shiftKey) {
+      const plotWidth = chartWrapperRef.current?.clientWidth;
+      if (plotWidth) {
+        panStateRef.current = {
+          startClientX: domEvent.clientX,
+          startDomain: zoomDomain,
+          plotWidth,
+        };
+        setIsPanning(true);
+      }
+      return;
+    }
+    setRefAreaLeft(chartState.activeLabel);
+  };
+
+  const handleZoomMouseMove = (chartState) => {
+    if (isPanning) return; // handled by the window-level listener below
+    if (!chartState || chartState.activeLabel == null) return;
+    if (refAreaLeft != null) {
+      setRefAreaRight(chartState.activeLabel);
+    }
+  };
+
+  const handleZoomMouseUp = () => {
+    if (isPanning) return; // handled by the window-level listener below
+    if (refAreaLeft != null && refAreaRight != null && refAreaLeft !== refAreaRight) {
+      const [left, right] = [refAreaLeft, refAreaRight].sort((a, b) => a - b);
+      setZoomDomain([left, right]);
+    }
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+  };
+
+  const handleResetZoom = () => {
+    setZoomDomain(null);
+    setRefAreaLeft(null);
+    setRefAreaRight(null);
+    setIsPanning(false);
+    panStateRef.current = null;
+  };
+
+  // While panning, track the drag on window listeners (not Recharts' bounded
+  // mouse handlers) so it keeps working even if the cursor leaves the chart,
+  // and so the pixel-to-time scale frozen at drag start never gets recomputed
+  // mid-gesture.
+  useEffect(() => {
+    if (!isPanning) return;
+
+    const handleWindowMouseMove = (e) => {
+      const pan = panStateRef.current;
+      if (!pan) return;
+      const deltaPx = e.clientX - pan.startClientX;
+      const width = pan.startDomain[1] - pan.startDomain[0];
+      const deltaData = (deltaPx / pan.plotWidth) * width;
+      let newStart = pan.startDomain[0] - deltaData;
+      let newEnd = pan.startDomain[1] - deltaData;
+      if (newStart < minTime) {
+        newStart = minTime;
+        newEnd = minTime + width;
+      }
+      if (newEnd > maxTime) {
+        newEnd = maxTime;
+        newStart = maxTime - width;
+      }
+      setZoomDomain([newStart, newEnd]);
+    };
+
+    const handleWindowMouseUp = () => {
+      panStateRef.current = null;
+      setIsPanning(false);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [isPanning, minTime, maxTime]);
 
   return (
     <div>
@@ -315,47 +460,62 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
               </div>
             </div>
             <div className="overflow-x-auto">
-            <div style={{ minWidth: '560px' }}>
-            <ResponsiveContainer width="100%" height={450}>
-              <ComposedChart 
-                data={chartData} 
+            <div style={{ minWidth: '560px' }} ref={chartWrapperRef}>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[11px] uppercase tracking-wide text-gray-400">Altitude ({unitLabel})</span>
+              <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Thermal start</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" />Thermal end</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Launch peak</span>
+                {zoomDomain && (
+                  <span className="text-gray-500">Drag to pan &middot; Shift+drag to zoom &middot; double-click to reset</span>
+                )}
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={450} style={{ cursor: zoomDomain ? (isPanning ? 'grabbing' : 'grab') : 'crosshair' }}>
+              <ComposedChart
+                data={chartData}
                 margin={{ top: 10, right: 0, left: 0, bottom: 30 }}
+                onMouseDown={handleZoomMouseDown}
+                onMouseMove={handleZoomMouseMove}
+                onMouseUp={handleZoomMouseUp}
+                onDoubleClick={handleResetZoom}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                <XAxis 
-                  dataKey="timestamp" 
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis
+                  dataKey="timestamp"
                   type="number"
-                  domain={[minTime, maxTime]}
+                  domain={[displayMinTime, displayMaxTime]}
                   ticks={ticks}
                   tickFormatter={formatTimeAxis}
-                  label={{ value: timeRange >= 3600 ? 'time (h:mm:ss)' : 'time', position: 'insideBottom', offset: -5, style: { fill: 'white' } }}
-                  tick={{ fontSize: 11, fill: 'white' }}
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
                   allowDataOverflow={true}
                   scale="linear"
-                  stroke="white"
+                  stroke="#4b5563"
                 />
-                <YAxis 
-                  label={{ value: `Altitude (${unitLabel})`, angle: -90, position: 'insideLeft', style: { fill: 'white' } }}
-                  tick={{ fontSize: 11, fill: 'white' }}
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
                   ticks={yTicks}
                   domain={[minYTick, maxYTick]}
-                  stroke="white"
+                  stroke="#4b5563"
                 />
-                <Tooltip 
-                  content={<CustomTooltip unitLabel={unitLabel} />}
-                  isAnimationActive={false}
-                  allowEscapeViewBox={{ x: false, y: false }}
-                  cursor={{ stroke: '#666', strokeWidth: 1, strokeDasharray: '3 3' }}
-                  shared={false}
-                  trigger="axis"
-                />
-<Line 
+                {!isPanning && (
+                  <Tooltip
+                    content={<CustomTooltip unitLabel={unitLabel} />}
+                    isAnimationActive={false}
+                    allowEscapeViewBox={{ x: false, y: false }}
+                    cursor={{ stroke: '#9ca3af', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    shared={false}
+                    trigger="axis"
+                  />
+                )}
+<Line
                   type="linear"
-                  dataKey="altitude" 
-                  stroke="#3b82f6" 
-                  strokeWidth={1.5}
+                  dataKey="altitude"
+                  stroke="#60a5fa"
+                  strokeWidth={2}
                   dot={renderCustomDot}
-                  activeDot={{ r: 4 }}
+                  activeDot={{ r: 4, fill: '#60a5fa', stroke: '#1f2937', strokeWidth: 2 }}
                   name={`Alt (${unitLabel})`}
                   isAnimationActive={false}
                   connectNulls={false}
@@ -367,6 +527,16 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                     fill="#fbbf24"
                     fillOpacity={0.3}
                     strokeOpacity={0}
+                  />
+                )}
+                {refAreaLeft != null && refAreaRight != null && (
+                  <ReferenceArea
+                    x1={refAreaLeft}
+                    x2={refAreaRight}
+                    fill="#60a5fa"
+                    fillOpacity={0.15}
+                    stroke="#60a5fa"
+                    strokeOpacity={0.5}
                   />
                 )}
               </ComposedChart>
