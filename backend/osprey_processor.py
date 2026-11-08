@@ -11,9 +11,6 @@ ALTITUDE_MOVING_AVG_WINDOW = 5
 THERMAL_CANDIDATE_WINDOW = 30
 THERMAL_MIN_PEAK_ALTITUDE_FT = 100
 THERMAL_MINIMUM_GAIN_FT = 25
-THERMAL_MAX_CLIMB_RATE_FPS = 7.5
-THERMAL_MAX_CLIMB_RATE_LOOKBACK = 5
-LAUNCH_MIN_CLIMB_RATE_FPS = 21
 LAUNCH_MIN_CLIMB_RATE_LOOKBACK = 5
 TROUGH_CANDIDATE_WINDOW = 10
 SESSION_MINIMUM_DURATION = 30
@@ -32,7 +29,6 @@ class VarioRecord:
         self.altitude_smoothed = 0.0
         self.thermal_peak_candidate = False
         self.thermal_peak = False
-        self.launch_peak_candidate = False
         self.launch_peak = False
         self.trough_bottom_candidate = False
         self.trough_bottom = False
@@ -78,51 +74,47 @@ def identify_thermal_peaks(vario_records, session_records, session_number):
             
             if vario_records[i].altitude_smoothed == maximum_thermal_peak:
                 vario_records[i].thermal_peak = True
-                # Disqualify if associated with high climb rate — this is a powered climb,
-                # not a thermal. Mark it as a launch/powered-climb boundary instead of just
-                # dropping it, so the backward search in identify_caught_thermals stops here
-                # rather than walking straight through it and merging separate climbs (that
-                # happen to straddle a powered burst too fast to be a thermal but not sustained
-                # enough to trip the launch detector's own climb-rate threshold) into one thermal.
-                if (vario_records[i].altitude_smoothed - vario_records[i - THERMAL_MAX_CLIMB_RATE_LOOKBACK].altitude_smoothed
-                    > THERMAL_MAX_CLIMB_RATE_FPS * THERMAL_MAX_CLIMB_RATE_LOOKBACK):
+                # Disqualify if the climb into this peak was a sustained powered
+                # burst rather than genuine (turbulent, spiky) thermal lift — a
+                # strong thermal's gusty cores can momentarily exceed what a
+                # fixed-window altitude-delta check allows, so use the same
+                # run-length test as identify_caught_thermals instead. Mark it
+                # as a launch/powered-climb boundary instead of just dropping
+                # it, so the backward search in identify_caught_thermals stops
+                # here rather than walking straight through it and merging
+                # separate climbs into one thermal.
+                if _contains_sustained_powered_climb(vario_records, max(0, i - THERMAL_CANDIDATE_WINDOW), i):
                     vario_records[i].thermal_peak = False
                     # altitude_smoothed is a trailing moving average, so its peak
                     # lags the true raw-altitude apex — refine to the local raw max
                     # (chart plots raw altitude).
                     lo = max(0, i - ALTITUDE_MOVING_AVG_WINDOW)
                     launch_index = max(range(lo, i + 1), key=lambda k: vario_records[k].altitude)
+                    # identify_launch_peaks may independently refine to this same
+                    # sample for the same powered climb; only count a new flag.
+                    if not vario_records[launch_index].launch_peak:
+                        session_records[session_number].launch_count += 1
                     vario_records[launch_index].launch_peak = True
-                    session_records[session_number].launch_count += 1
 
 def identify_launch_peaks(vario_records, session_records, session_number):
-    """Identifies launch peaks using original logic"""
-    for i in range(LAUNCH_MIN_CLIMB_RATE_LOOKBACK, len(vario_records) - LAUNCH_MIN_CLIMB_RATE_LOOKBACK):
-        maximum_launch_peak = 0
-        for j in range(i - LAUNCH_MIN_CLIMB_RATE_LOOKBACK, i):
-            if vario_records[j].climb_rate > LAUNCH_MIN_CLIMB_RATE_FPS:
-                maximum_launch_peak = vario_records[j].climb_rate
-        if maximum_launch_peak > LAUNCH_MIN_CLIMB_RATE_FPS:
-            vario_records[i].launch_peak_candidate = True
-    
-    for i in range(LAUNCH_MIN_CLIMB_RATE_LOOKBACK, len(vario_records) - LAUNCH_MIN_CLIMB_RATE_LOOKBACK):
-        if not vario_records[i].launch_peak_candidate and vario_records[i - 1].launch_peak_candidate:
-            # The candidate run trails the actual altitude apex by design — it
-            # stays "candidate" for LOOKBACK samples after the last qualifying
-            # climb rate — so find the true peak altitude within the run
-            # instead of marking its tail end.
-            run_start = i - 1
-            while run_start > 0 and vario_records[run_start - 1].launch_peak_candidate:
-                run_start -= 1
-            peak_index = max(range(run_start, i), key=lambda k: vario_records[k].altitude_smoothed)
-            # altitude_smoothed is a trailing moving average, so even the true
-            # peak-of-the-run lags the actual raw-altitude apex by up to
-            # ALTITUDE_MOVING_AVG_WINDOW samples. The chart plots raw altitude,
-            # so refine to the local raw max (same idea as refine_thermal_markers).
-            lo = max(0, peak_index - ALTITUDE_MOVING_AVG_WINDOW)
-            peak_index = max(range(lo, peak_index + 1), key=lambda k: vario_records[k].altitude)
-            vario_records[peak_index].launch_peak = True
+    """Identifies launch peaks: a sustained run of high climb rate marks a
+    powered climb-out. A single instantaneous spike isn't enough — a strong,
+    gusty thermal can momentarily exceed this rate too, so this requires the
+    same run-length test as _contains_sustained_powered_climb rather than
+    reacting to any one qualifying sample."""
+    n = len(vario_records)
+    for run_end_index in _sustained_powered_climb_run_ends(vario_records, 0, n - 1):
+        lo = max(0, run_end_index - LAUNCH_MIN_CLIMB_RATE_LOOKBACK)
+        hi = min(n - 1, run_end_index + LAUNCH_MIN_CLIMB_RATE_LOOKBACK)
+        # Altitude keeps rising briefly after climb rate drops off, so search
+        # both sides of where the sustained run ended for the true raw-altitude
+        # apex (the chart plots raw altitude, not the smoothed series).
+        peak_index = max(range(lo, hi + 1), key=lambda k: vario_records[k].altitude)
+        # identify_thermal_peaks may independently refine to this same sample
+        # for the same powered climb; only count a new flag.
+        if not vario_records[peak_index].launch_peak:
             session_records[session_number].launch_count += 1
+        vario_records[peak_index].launch_peak = True
 
 def merge_adjacent_launch_peaks(vario_records, session_records, session_number):
     """Collapse launch_peak flags that stem from the same physical launch.
@@ -155,18 +147,35 @@ def identify_trough_bottoms(vario_records, session_number):
             if vario_records[i].altitude_smoothed == minimum_trough_bottom:
                 vario_records[i].trough_bottom = True
 
+def _sustained_powered_climb_run_ends(vario_records, start_index, end_index):
+    """Yield the end index of each sustained powered-climb run within
+    [start_index, end_index]. A single sample dipping at or below the rate is
+    sensor noise, not the climb ending, as long as it's flanked by qualifying
+    samples on both sides (not just preceded by one) — so it's bridged rather
+    than breaking the run. A sample flanked by another non-qualifying sample
+    is a real end to the run."""
+    qualifies = [vario_records[k].climb_rate > SUSTAINED_POWERED_CLIMB_RATE_FPS
+                 for k in range(start_index, end_index + 1)]
+    bridged = list(qualifies)
+    for i in range(1, len(bridged) - 1):
+        if not bridged[i] and qualifies[i - 1] and qualifies[i + 1]:
+            bridged[i] = True
+
+    run = 0
+    for offset, ok in enumerate(bridged):
+        if ok:
+            run += 1
+        else:
+            if run >= SUSTAINED_POWERED_CLIMB_RUN:
+                yield start_index + offset - 1
+            run = 0
+    if run >= SUSTAINED_POWERED_CLIMB_RUN:
+        yield end_index
+
 def _contains_sustained_powered_climb(vario_records, start_index, end_index):
     """True if a candidate thermal span contains a sustained powered-climb burst
     rather than genuine (turbulent, spiky) thermal lift."""
-    run = 0
-    for k in range(start_index, end_index + 1):
-        if vario_records[k].climb_rate > SUSTAINED_POWERED_CLIMB_RATE_FPS:
-            run += 1
-            if run >= SUSTAINED_POWERED_CLIMB_RUN:
-                return True
-        else:
-            run = 0
-    return False
+    return next(_sustained_powered_climb_run_ends(vario_records, start_index, end_index), None) is not None
 
 def identify_caught_thermals(vario_records, session_records, session_number, thermal_records):
     """Identifies caught thermals using original logic"""
@@ -185,6 +194,7 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
     while i > 0:
         if vario_records[i].thermal_peak:
             last_event_was_a_trough = False
+            trough_reversal_tolerated = False
             j = i
             while j > 0:
                 j -= 1
@@ -220,37 +230,49 @@ def identify_caught_thermals(vario_records, session_records, session_number, the
                 
                 elif vario_records[j].trough_bottom and last_event_was_a_trough:
                     if vario_records[j].altitude_smoothed > last_trough_bottom_altitude:
-                        start_time = round(last_trough_bottom_timestamp, 1)
-                        end_time = round(vario_records[i].timestamp, 1)
-                        start_altitude = round(last_trough_bottom_altitude, 1)
-                        end_altitude = round(vario_records[i].altitude_smoothed, 1)
-                        duration = round(end_time - start_time, 1)
-                        altitude_gain = round(end_altitude - start_altitude, 1)
-                        avg_climb_rate = round(altitude_gain / duration, 1) if duration > 0 else 0
-                        if altitude_gain >= THERMAL_MINIMUM_GAIN_FT and not _contains_sustained_powered_climb(vario_records, last_trough_bottom_index, i):
-                            thermal_records.append({
-                                'session_number': session_number,
-                                'thermal_number': thermal_index,
-                                'start_time': start_time,
-                                'start_index': last_trough_bottom_index,
-                                'end_time': end_time,
-                                'end_index': i,
-                                'start_altitude': start_altitude,
-                                'end_altitude': end_altitude,
-                                'duration': duration,
-                                'altitude_gain': altitude_gain,
-                                'avg_climb_rate': avg_climb_rate
-                            })
-                            session_records[session_number].thermal_count += 1
-                            session_records[session_number].total_thermal_altitude_gain += altitude_gain
-                            session_records[session_number].total_thermal_duration += duration
-                            thermal_index += 1
-                        i = j
-                        break
+                        if not trough_reversal_tolerated:
+                            # A single higher trough while walking backward
+                            # could just be noise inside one continuous,
+                            # bumpy climb rather than a genuinely separate
+                            # cycle — tolerate one reversal before concluding
+                            # the climb has actually ended. A second reversal
+                            # in a row (handled below, since this flag isn't
+                            # reset) means the climb is really continuing to
+                            # fall, so finalize then.
+                            trough_reversal_tolerated = True
+                        else:
+                            start_time = round(last_trough_bottom_timestamp, 1)
+                            end_time = round(vario_records[i].timestamp, 1)
+                            start_altitude = round(last_trough_bottom_altitude, 1)
+                            end_altitude = round(vario_records[i].altitude_smoothed, 1)
+                            duration = round(end_time - start_time, 1)
+                            altitude_gain = round(end_altitude - start_altitude, 1)
+                            avg_climb_rate = round(altitude_gain / duration, 1) if duration > 0 else 0
+                            if altitude_gain >= THERMAL_MINIMUM_GAIN_FT and not _contains_sustained_powered_climb(vario_records, last_trough_bottom_index, i):
+                                thermal_records.append({
+                                    'session_number': session_number,
+                                    'thermal_number': thermal_index,
+                                    'start_time': start_time,
+                                    'start_index': last_trough_bottom_index,
+                                    'end_time': end_time,
+                                    'end_index': i,
+                                    'start_altitude': start_altitude,
+                                    'end_altitude': end_altitude,
+                                    'duration': duration,
+                                    'altitude_gain': altitude_gain,
+                                    'avg_climb_rate': avg_climb_rate
+                                })
+                                session_records[session_number].thermal_count += 1
+                                session_records[session_number].total_thermal_altitude_gain += altitude_gain
+                                session_records[session_number].total_thermal_duration += duration
+                                thermal_index += 1
+                            i = j
+                            break
                     else:
                         last_trough_bottom_altitude = vario_records[j].altitude_smoothed
                         last_trough_bottom_timestamp = vario_records[j].timestamp
                         last_trough_bottom_index = j
+                        trough_reversal_tolerated = False
                 
                 elif vario_records[j].thermal_peak and last_event_was_a_trough:
                     start_time = round(last_trough_bottom_timestamp, 1)

@@ -1,9 +1,21 @@
-import { ChevronLeft, ChevronRight, MoveUp, Wind } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MoveUp, Wind, Trophy } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceArea } from 'recharts';
 import { formatSessionDetailDate } from '../utils/dateFormatter';
 import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
 import { WeatherIcon } from '../utils/weatherIcon';
+import { apiFetch } from '../utils/api';
+
+const isRecord = (value, recordValue) =>
+  recordValue != null && value != null && Math.abs(value - recordValue) < 0.01;
+
+const RecordBadge = ({ label, size = 20, side = 'right' }) => (
+  <Trophy
+    size={size}
+    className={`text-amber-400 inline-block align-middle ${side === 'left' ? '' : 'ml-1'}`}
+    title={`All-time record${label ? `: ${label}` : ''}`}
+  />
+);
 
 const tooltipBoxStyle = {
   backgroundColor: '#111827',
@@ -49,7 +61,16 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
   // start) lives in a ref rather than state: it's read from window-level
   // listeners and must never trigger its own re-render.
   const panStateRef = useRef(null);
+  const [profileStats, setProfileStats] = useState(null);
   const unitLabel = getUnitLabel();
+
+  // Fetch all-time records once, to badge any session/thermal stat that matches one
+  useEffect(() => {
+    apiFetch('/api/profile-stats')
+      .then(res => res.json())
+      .then(setProfileStats)
+      .catch(err => console.error('Error fetching profile stats:', err));
+  }, []);
 
   // Reset any active zoom/pan when switching sessions
   useEffect(() => {
@@ -148,14 +169,27 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
 
     const isThermalStart = [...thermalStartTimes].some(t => Math.abs(t - payload.timestamp) < 0.6);
     const isThermalEnd = [...thermalEndTimes].some(t => Math.abs(t - payload.timestamp) < 0.6);
+    const isLaunchPeak = payload.launch_peak;
 
+    // A launch that caught a thermal immediately is both a launch peak and a
+    // thermal start/end at the same sample — show both as a ring + fill
+    // instead of letting one color hide the other.
+    if (isLaunchPeak && (isThermalStart || isThermalEnd)) {
+      const ringColor = isThermalStart ? '#10b981' : '#ef4444';
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={8} fill="none" stroke={ringColor} strokeWidth={2} />
+          <circle cx={cx} cy={cy} r={4} fill="#fbbf24" stroke="none" />
+        </g>
+      );
+    }
     if (isThermalStart) {
       return <circle cx={cx} cy={cy} r={6} fill="#10b981" stroke="none" />;
     }
     if (isThermalEnd) {
       return <circle cx={cx} cy={cy} r={6} fill="#ef4444" stroke="none" />;
     }
-    if (payload.launch_peak) {
+    if (isLaunchPeak) {
       return <circle cx={cx} cy={cy} r={6} fill="#fbbf24" stroke="none" />;
     }
     return null;
@@ -432,7 +466,10 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
             <div className="flex flex-wrap justify-center gap-x-12 gap-y-3 mb-4">
               <div className="text-center">
                 <div className="text-sm text-gray-400">Duration</div>
-                <div className="text-xl font-bold text-white">{formatDurationHMS(session.duration_seconds)}</div>
+                <div className="text-xl font-bold text-white">
+                  {formatDurationHMS(session.duration_seconds)}
+                  {isRecord(session.duration_seconds, profileStats?.max_flight_time_session?.value) && <RecordBadge label="Longest flight" />}
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-sm text-gray-400">Launches</div>
@@ -444,11 +481,17 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
               </div>
               <div className="text-center">
                 <div className="text-sm text-gray-400">Thermal Gain</div>
-                <div className="text-xl font-bold text-white">{formatAltitudeValue(session.total_thermal_gain).toLocaleString()} {unitLabel}</div>
+                <div className="text-xl font-bold text-white">
+                  {formatAltitudeValue(session.total_thermal_gain).toLocaleString()} {unitLabel}
+                  {isRecord(session.total_thermal_gain, profileStats?.max_thermal_gain_session?.value) && <RecordBadge label="Most thermal gain in a session" />}
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-sm text-gray-400">Thermal Duration</div>
-                <div className="text-xl font-bold text-white">{formatDurationHMS(session.total_thermal_duration)}</div>
+                <div className="text-xl font-bold text-white">
+                  {formatDurationHMS(session.total_thermal_duration)}
+                  {isRecord(session.total_thermal_duration, profileStats?.max_thermal_duration_session?.value) && <RecordBadge label="Most thermal duration in a session" />}
+                </div>
               </div>
               <div className="text-center">
                 <div className="text-sm text-gray-400">Thermal Duration (%)</div>
@@ -456,6 +499,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                   {session.duration_seconds > 0
                     ? ((session.total_thermal_duration / session.duration_seconds) * 100).toFixed(1)
                     : '0.0'}%
+                  {session.duration_seconds > 0 && isRecord((session.total_thermal_duration / session.duration_seconds) * 100, profileStats?.max_thermal_duration_pct_session?.value) && <RecordBadge label="Highest thermal duration % in a session" />}
                 </div>
               </div>
             </div>
@@ -472,7 +516,7 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                 )}
               </div>
             </div>
-            <ResponsiveContainer width="100%" height={450} style={{ cursor: zoomDomain ? (isPanning ? 'grabbing' : 'grab') : 'crosshair' }}>
+            <ResponsiveContainer width="100%" height={450} style={{ cursor: zoomDomain ? (isPanning ? 'grabbing' : 'grab') : 'crosshair', userSelect: 'none', WebkitUserSelect: 'none' }}>
               <ComposedChart
                 data={chartData}
                 margin={{ top: 10, right: 0, left: 0, bottom: 30 }}
@@ -575,11 +619,16 @@ export default function SessionDetail({ session, sessions, onBack, onSessionChan
                         <td className="py-1 px-1 text-white text-right">{index + 1}</td>
                         <td className="py-1 px-1 text-gray-300 text-right">{Math.round(formatAltitudeValue(thermal.start_altitude))}</td>
                         <td className="py-1 px-1 text-gray-300 text-right">{Math.round(formatAltitudeValue(thermal.end_altitude))}</td>
-                        <td className="py-1 px-1 font-semibold text-green-400 text-right">
+                        <td className="py-1 px-1 font-semibold text-green-400 text-right whitespace-nowrap">
+                          {isRecord(thermal.altitude_gain, profileStats?.max_thermal_gain?.value) && <RecordBadge label="Biggest single thermal" size={12} side="left" />}
                           +{Math.round(formatAltitudeValue(thermal.altitude_gain))}
                         </td>
-                        <td className="py-1 px-1 text-gray-300 text-right">{formatDuration(thermal.duration)}</td>
-                        <td className="py-1 px-1 text-gray-300 text-right">
+                        <td className="py-1 px-1 text-gray-300 text-right whitespace-nowrap">
+                          {isRecord(thermal.duration, profileStats?.max_thermal_duration?.value) && <RecordBadge label="Longest single thermal" size={12} side="left" />}
+                          {formatDuration(thermal.duration)}
+                        </td>
+                        <td className="py-1 px-1 text-gray-300 text-right whitespace-nowrap">
+                          {isRecord(thermal.avg_climb_rate, profileStats?.max_avg_climb_rate?.value) && <RecordBadge label="Best average climb rate" size={12} side="left" />}
                           {thermal.duration > 0 ? (formatAltitudeValue(thermal.altitude_gain) / thermal.duration).toFixed(1) : '0.0'}
                         </td>
                       </tr>

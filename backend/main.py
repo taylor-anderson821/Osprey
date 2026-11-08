@@ -19,7 +19,7 @@ from osprey_processor import process_tlm_file
 app = FastAPI(title="Osprey Flight Analytics API")
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-DEFAULT_UPLOAD_LOCATION_NAME = "SRQ Flying Squadron"
+DEFAULT_UPLOAD_LOCATION_NAME = "Sarasota RC Squadron"
 
 app.add_middleware(
     CORSMiddleware,
@@ -198,6 +198,29 @@ async def upload_tlm_file(
             default_location_id = fallback.id
             default_location = fallback
 
+    # Snapshot pre-upload personal bests so we can tell whether anything in
+    # this upload actually breaks a record, same metrics as /api/profile-stats.
+    # had_prior=False (no earlier data at all for that metric) suppresses the
+    # notification — a user's very first session trivially "beats" a zero
+    # baseline on everything, which isn't a record worth celebrating.
+    def current_best(col, join_thermal=False):
+        q = db.query(func.max(col))
+        if join_thermal:
+            q = q.join(models.FlightSession)
+        value = q.filter(models.FlightSession.user_id == current_user.id).scalar()
+        return value or 0, value is not None
+
+    best_flight_time, had_prior_flight_time = current_best(models.FlightSession.duration_seconds)
+    best_session_thermal_gain, had_prior_session_thermal_gain = current_best(models.FlightSession.total_thermal_gain)
+    best_session_thermal_duration, had_prior_session_thermal_duration = current_best(models.FlightSession.total_thermal_duration)
+    best_session_thermal_pct, had_prior_session_thermal_pct = current_best(
+        (models.FlightSession.total_thermal_duration / func.nullif(models.FlightSession.duration_seconds, 0)) * 100
+    )
+    best_thermal_duration, had_prior_thermal_duration = current_best(models.Thermal.duration, join_thermal=True)
+    best_thermal_gain, had_prior_thermal_gain = current_best(models.Thermal.altitude_gain, join_thermal=True)
+    best_avg_climb_rate, had_prior_avg_climb_rate = current_best(models.Thermal.avg_climb_rate, join_thermal=True)
+    new_records = {}
+
     session_ids = []
     for session_data in result['sessions']:
         db_session = models.FlightSession(
@@ -221,6 +244,25 @@ async def upload_tlm_file(
         if default_location_id:
             store_weather_on_session(db_session, fallback_location=default_location)
 
+        if session_data['duration_seconds'] > best_flight_time:
+            best_flight_time = session_data['duration_seconds']
+            if had_prior_flight_time:
+                new_records['flight_time'] = {'session_id': db_session.id, 'value': best_flight_time}
+        if session_data['total_thermal_gain'] > best_session_thermal_gain:
+            best_session_thermal_gain = session_data['total_thermal_gain']
+            if had_prior_session_thermal_gain:
+                new_records['session_thermal_gain'] = {'session_id': db_session.id, 'value': best_session_thermal_gain}
+        if session_data['total_thermal_duration'] > best_session_thermal_duration:
+            best_session_thermal_duration = session_data['total_thermal_duration']
+            if had_prior_session_thermal_duration:
+                new_records['session_thermal_duration'] = {'session_id': db_session.id, 'value': best_session_thermal_duration}
+        if session_data['duration_seconds'] > 0:
+            thermal_pct = session_data['total_thermal_duration'] / session_data['duration_seconds'] * 100
+            if thermal_pct > best_session_thermal_pct:
+                best_session_thermal_pct = thermal_pct
+                if had_prior_session_thermal_pct:
+                    new_records['session_thermal_pct'] = {'session_id': db_session.id, 'value': best_session_thermal_pct}
+
         for thermal_data in session_data['thermals']:
             db_thermal = models.Thermal(
                 session_id=db_session.id,
@@ -235,11 +277,25 @@ async def upload_tlm_file(
             )
             db.add(db_thermal)
 
+            if thermal_data['duration'] > best_thermal_duration:
+                best_thermal_duration = thermal_data['duration']
+                if had_prior_thermal_duration:
+                    new_records['thermal_duration'] = {'session_id': db_session.id, 'value': best_thermal_duration}
+            if thermal_data['altitude_gain'] > best_thermal_gain:
+                best_thermal_gain = thermal_data['altitude_gain']
+                if had_prior_thermal_gain:
+                    new_records['thermal_gain'] = {'session_id': db_session.id, 'value': best_thermal_gain}
+            if thermal_data['avg_climb_rate'] > best_avg_climb_rate:
+                best_avg_climb_rate = thermal_data['avg_climb_rate']
+                if had_prior_avg_climb_rate:
+                    new_records['avg_climb_rate'] = {'session_id': db_session.id, 'value': best_avg_climb_rate}
+
     db.commit()
 
     return {
         "message": f"Processed {len(result['sessions'])} sessions with {result['total_thermals']} thermals",
-        "session_ids": session_ids
+        "session_ids": session_ids,
+        "new_records": [{"type": k, **v} for k, v in new_records.items()]
     }
 
 @app.get("/api/sessions", response_model=List[schemas.SessionSummary])
@@ -349,6 +405,10 @@ def get_profile_stats(
     max_flight = best_session(models.FlightSession.duration_seconds)
     max_session_gain = best_session(models.FlightSession.total_thermal_gain)
     max_session_thermal_dur = best_session(models.FlightSession.total_thermal_duration)
+    thermal_duration_pct_expr = (
+        models.FlightSession.total_thermal_duration / func.nullif(models.FlightSession.duration_seconds, 0)
+    ) * 100
+    max_session_thermal_pct = best_session(thermal_duration_pct_expr)
 
     def best_thermal(col):
         row = db.query(models.Thermal.session_id, col)\
@@ -356,6 +416,27 @@ def get_profile_stats(
             .filter(models.FlightSession.user_id == uid)\
             .order_by(col.desc()).first()
         return {"session_id": row[0], "value": float(row[1])} if row and row[1] else None
+
+    # Same four metrics as session records, but summed per calendar day
+    # instead of per session.
+    daily_agg = db.query(
+        func.date(models.FlightSession.start_time).label('date'),
+        func.sum(models.FlightSession.duration_seconds).label('flight_time'),
+        func.sum(models.FlightSession.total_thermal_gain).label('thermal_gain'),
+        func.sum(models.FlightSession.total_thermal_duration).label('thermal_duration'),
+    ).filter(models.FlightSession.user_id == uid)\
+     .group_by(func.date(models.FlightSession.start_time))\
+     .subquery()
+
+    def best_day(col):
+        row = db.query(daily_agg.c.date, col).order_by(col.desc()).first()
+        return {"date": str(row[0]), "value": float(row[1])} if row and row[1] else None
+
+    max_daily_flight_time = best_day(daily_agg.c.flight_time)
+    max_daily_thermal_gain = best_day(daily_agg.c.thermal_gain)
+    max_daily_thermal_duration = best_day(daily_agg.c.thermal_duration)
+    daily_thermal_pct_expr = (daily_agg.c.thermal_duration / func.nullif(daily_agg.c.flight_time, 0)) * 100
+    max_daily_thermal_pct = best_day(daily_thermal_pct_expr)
 
     aircraft = [r[0] for r in db.query(models.FlightSession.aircraft_model)
                 .filter(models.FlightSession.user_id == uid,
@@ -370,9 +451,14 @@ def get_profile_stats(
         "max_flight_time_session": max_flight,
         "max_thermal_gain_session": max_session_gain,
         "max_thermal_duration_session": max_session_thermal_dur,
+        "max_thermal_duration_pct_session": max_session_thermal_pct,
         "max_thermal_duration": best_thermal(models.Thermal.duration),
         "max_thermal_gain": best_thermal(models.Thermal.altitude_gain),
         "max_avg_climb_rate": best_thermal(models.Thermal.avg_climb_rate),
+        "max_daily_flight_time": max_daily_flight_time,
+        "max_daily_thermal_gain": max_daily_thermal_gain,
+        "max_daily_thermal_duration": max_daily_thermal_duration,
+        "max_daily_thermal_pct": max_daily_thermal_pct,
         "aircraft_models": aircraft,
     }
 

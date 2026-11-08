@@ -85,6 +85,7 @@ export default function ProfileMobile() {
   const maxFlightTimeSession = stats?.max_flight_time_session;
   const maxThermalGainSession = stats?.max_thermal_gain_session;
   const maxThermalDurationSession = stats?.max_thermal_duration_session;
+  const maxThermalDurationPctSession = stats?.max_thermal_duration_pct_session;
   const maxThermalDurationThermal = stats?.max_thermal_duration;
   const maxThermalGainThermal = stats?.max_thermal_gain;
   const maxClimbRateThermal = stats?.max_avg_climb_rate;
@@ -92,6 +93,7 @@ export default function ProfileMobile() {
   const maxFlightTime = maxFlightTimeSession?.value ?? 0;
   const maxThermalGain = maxThermalGainSession?.value ?? 0;
   const maxThermalDuration = maxThermalDurationSession?.value ?? 0;
+  const maxThermalDurationPct = maxThermalDurationPctSession?.value ?? 0;
   const maxSingleThermalDuration = maxThermalDurationThermal?.value ?? 0;
   const maxSingleThermalGain = maxThermalGainThermal?.value ?? 0;
   const maxAvgClimbRate = maxClimbRateThermal?.value ?? 0;
@@ -168,6 +170,10 @@ export default function ProfileMobile() {
               <tr className="border-b border-gray-700 cursor-pointer hover:bg-gray-700" onClick={() => maxThermalDurationSession && navigate(`/sessions/${maxThermalDurationSession.id}`)}>
                 <td className="py-1 px-1 text-gray-300">Thermal Duration</td>
                 <td className="py-1 px-1 text-white text-right font-semibold">{formatDuration(maxThermalDuration)}</td>
+              </tr>
+              <tr className="border-b border-gray-700 cursor-pointer hover:bg-gray-700" onClick={() => maxThermalDurationPctSession && navigate(`/sessions/${maxThermalDurationPctSession.id}`)}>
+                <td className="py-1 px-1 text-gray-300">Thermal Duration %</td>
+                <td className="py-1 px-1 text-white text-right font-semibold">{maxThermalDurationPct.toFixed(1)}%</td>
               </tr>
             </tbody>
           </table>

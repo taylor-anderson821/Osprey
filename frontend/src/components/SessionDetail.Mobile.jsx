@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, Wind, MoveUp } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, ReferenceArea } from 'recharts';
 import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
 import { WeatherIcon } from '../utils/weatherIcon';
@@ -23,8 +23,23 @@ const CustomTooltip = ({ active, payload, label, unitLabel }) => {
 
 export default function SessionDetailMobile({ session, sessions, onBack, onSessionChange }) {
   const [hoveredThermal, setHoveredThermal] = useState(null);
+  const [zoomDomain, setZoomDomain] = useState(null);
+  const [isZoomTouchActive, setIsZoomTouchActive] = useState(false);
   const unitLabel = getUnitLabel();
   const touchStartX = useRef(null);
+  const chartInnerRef = useRef(null);
+  const pinchStateRef = useRef(null);
+  const panStateRef = useRef(null);
+  const tapStartRef = useRef(null);
+  const lastTapRef = useRef(0);
+
+  // Reset any active zoom/pan when switching sessions
+  useEffect(() => {
+    setZoomDomain(null);
+    setIsZoomTouchActive(false);
+    pinchStateRef.current = null;
+    panStateRef.current = null;
+  }, [session.id]);
 
   const handleTouchStart = (e) => {
     touchStartX.current = e.touches[0].clientX;
@@ -73,6 +88,7 @@ export default function SessionDetailMobile({ session, sessions, onBack, onSessi
     timestamp: point.timestamp,
     altitude: formatAltitudeValue(point.altitude),
     climb_rate: point.climb_rate,
+    launch_peak: point.launch_peak,
   }));
 
   const thermalStartTimes = new Set(session.thermals.map(t => t.start_time));
@@ -82,21 +98,53 @@ export default function SessionDetailMobile({ session, sessions, onBack, onSessi
     const { cx, cy, payload } = props;
     const isThermalStart = [...thermalStartTimes].some(t => Math.abs(t - payload.timestamp) < 0.6);
     const isThermalEnd = [...thermalEndTimes].some(t => Math.abs(t - payload.timestamp) < 0.6);
+    const isLaunchPeak = payload.launch_peak;
+
+    // A launch that caught a thermal immediately is both a launch peak and a
+    // thermal start/end at the same sample — show both as a ring + fill
+    // instead of letting one color hide the other.
+    if (isLaunchPeak && (isThermalStart || isThermalEnd)) {
+      const ringColor = isThermalStart ? '#10b981' : '#ef4444';
+      return (
+        <g>
+          <circle cx={cx} cy={cy} r={5} fill="none" stroke={ringColor} strokeWidth={1.5} />
+          <circle cx={cx} cy={cy} r={2} fill="#fbbf24" stroke="none" />
+        </g>
+      );
+    }
     if (isThermalStart) return <circle cx={cx} cy={cy} r={3} fill="#10b981" stroke="none" />;
     if (isThermalEnd) return <circle cx={cx} cy={cy} r={3} fill="#ef4444" stroke="none" />;
+    if (isLaunchPeak) return <circle cx={cx} cy={cy} r={3} fill="#fbbf24" stroke="none" />;
     return null;
   };
 
   const minTime = Math.min(...chartData.map(d => d.timestamp));
   const maxTime = Math.max(...chartData.map(d => d.timestamp));
-  const timeRange = maxTime - minTime;
-  const tickIntervalSec = timeRange > 3600 ? 600 : timeRange > 1800 ? 300 : timeRange > 600 ? 120 : 60;
-  const startTick = Math.ceil(minTime / tickIntervalSec) * tickIntervalSec;
-  const ticks = [];
-  for (let t = startTick; t <= maxTime; t += tickIntervalSec) ticks.push(t);
+  const fullTimeRange = maxTime - minTime;
 
-  const minAltitude = Math.min(...chartData.map(d => d.altitude));
-  const maxAltitude = Math.max(...chartData.map(d => d.altitude));
+  // When zoomed (pinch), restrict the displayed domain and both axes' tick
+  // ranges to the pinched window instead of the full session.
+  const displayMinTime = zoomDomain ? zoomDomain[0] : minTime;
+  const displayMaxTime = zoomDomain ? zoomDomain[1] : maxTime;
+  const visibleData = zoomDomain
+    ? chartData.filter(d => d.timestamp >= displayMinTime && d.timestamp <= displayMaxTime)
+    : chartData;
+
+  const timeRange = displayMaxTime - displayMinTime;
+  const tickIntervalSec = timeRange > 3600 ? 600
+    : timeRange > 1800 ? 300
+    : timeRange > 600 ? 120
+    : timeRange > 240 ? 60
+    : timeRange > 90 ? 30
+    : timeRange > 40 ? 15
+    : timeRange > 20 ? 10
+    : 5;
+  const startTick = Math.ceil(displayMinTime / tickIntervalSec) * tickIntervalSec;
+  const ticks = [];
+  for (let t = startTick; t <= displayMaxTime; t += tickIntervalSec) ticks.push(t);
+
+  const minAltitude = Math.min(...(visibleData.length ? visibleData : chartData).map(d => d.altitude));
+  const maxAltitude = Math.max(...(visibleData.length ? visibleData : chartData).map(d => d.altitude));
   const altitudeRange = maxAltitude - minAltitude;
   let yTickInterval = altitudeRange <= 100 ? 25 : altitudeRange <= 500 ? 50 : altitudeRange <= 1000 ? 100 : altitudeRange <= 2500 ? 250 : 500;
   const minYTick = Math.floor(minAltitude / yTickInterval) * yTickInterval;
@@ -104,7 +152,128 @@ export default function SessionDetailMobile({ session, sessions, onBack, onSessi
   const yTicks = [];
   for (let y = minYTick; y <= maxYTick; y += yTickInterval) yTicks.push(y);
 
-  const formatTimeAxis = (seconds) => `${Math.round(seconds / 60)}m`;
+  const formatTimeAxis = (seconds) => {
+    if (tickIntervalSec < 60) {
+      const m = Math.floor(seconds / 60);
+      const s = Math.round(seconds % 60);
+      return `${m}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${Math.round(seconds / 60)}m`;
+  };
+
+  const getTouchDistance = (touches) =>
+    Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  const getTouchMidX = (touches) => (touches[0].clientX + touches[1].clientX) / 2;
+
+  // Pinch-to-zoom + single-finger pan (once zoomed) on the altitude chart.
+  // Mirrors the desktop drag-to-zoom/pan feature but adapted to touch:
+  // two fingers pinch to zoom, one finger pans once zoomed, double-tap
+  // resets. Must stopPropagation so these gestures don't also trigger the
+  // outer single-finger session-swipe handler.
+  const handleChartTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      e.stopPropagation();
+      const rect = chartInnerRef.current.getBoundingClientRect();
+      const startDomain = zoomDomain || [minTime, maxTime];
+      const startDistance = getTouchDistance(e.touches);
+      const midX = getTouchMidX(e.touches) - rect.left;
+      const anchorTime = startDomain[0] + (midX / rect.width) * (startDomain[1] - startDomain[0]);
+      pinchStateRef.current = { startDistance, startDomain, plotWidth: rect.width, anchorTime };
+      panStateRef.current = null;
+      setIsZoomTouchActive(true);
+      return;
+    }
+    if (e.touches.length === 1) {
+      tapStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, time: Date.now() };
+      if (zoomDomain) {
+        e.stopPropagation();
+        const rect = chartInnerRef.current.getBoundingClientRect();
+        panStateRef.current = { startClientX: e.touches[0].clientX, startDomain: zoomDomain, plotWidth: rect.width };
+        pinchStateRef.current = null;
+        setIsZoomTouchActive(true);
+      } else if (fullTimeRange > 1200) {
+        // Not zoomed but wide enough to scroll natively — let the scroll
+        // happen without it also triggering the outer session-swipe handler.
+        e.stopPropagation();
+      }
+    }
+  };
+
+  const handleChartTouchMove = (e) => {
+    if (e.touches.length === 2 && pinchStateRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      const { startDistance, startDomain, plotWidth, anchorTime } = pinchStateRef.current;
+      if (startDistance < 1) return;
+      const currentDistance = getTouchDistance(e.touches);
+      const scale = currentDistance / startDistance;
+      const startWidth = startDomain[1] - startDomain[0];
+      const minWidth = Math.min(10, fullTimeRange);
+      let newWidth = Math.max(minWidth, Math.min(fullTimeRange, startWidth / scale));
+      const rect = chartInnerRef.current.getBoundingClientRect();
+      const midX = getTouchMidX(e.touches) - rect.left;
+      let newStart = anchorTime - (midX / plotWidth) * newWidth;
+      let newEnd = newStart + newWidth;
+      if (newStart < minTime) {
+        newStart = minTime;
+        newEnd = minTime + newWidth;
+      }
+      if (newEnd > maxTime) {
+        newEnd = maxTime;
+        newStart = maxTime - newWidth;
+      }
+      setZoomDomain(newWidth >= fullTimeRange - 0.001 ? null : [newStart, newEnd]);
+      return;
+    }
+    if (e.touches.length === 1 && panStateRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      const { startClientX, startDomain, plotWidth } = panStateRef.current;
+      const deltaPx = e.touches[0].clientX - startClientX;
+      const width = startDomain[1] - startDomain[0];
+      const deltaData = (deltaPx / plotWidth) * width;
+      let newStart = startDomain[0] - deltaData;
+      let newEnd = startDomain[1] - deltaData;
+      if (newStart < minTime) {
+        newStart = minTime;
+        newEnd = minTime + width;
+      }
+      if (newEnd > maxTime) {
+        newEnd = maxTime;
+        newStart = maxTime - width;
+      }
+      setZoomDomain([newStart, newEnd]);
+    }
+  };
+
+  const handleChartTouchEnd = (e) => {
+    if (zoomDomain || fullTimeRange > 1200) {
+      e.stopPropagation();
+    }
+    if (e.touches.length < 2) pinchStateRef.current = null;
+    if (e.touches.length === 0) {
+      panStateRef.current = null;
+      setIsZoomTouchActive(false);
+
+      // Double-tap to reset zoom (only meaningful while zoomed).
+      const tapStart = tapStartRef.current;
+      tapStartRef.current = null;
+      if (zoomDomain && tapStart && e.changedTouches.length === 1) {
+        const dx = e.changedTouches[0].clientX - tapStart.x;
+        const dy = e.changedTouches[0].clientY - tapStart.y;
+        const isTap = Math.hypot(dx, dy) < 10 && Date.now() - tapStart.time < 300;
+        if (isTap) {
+          const now = Date.now();
+          if (now - lastTapRef.current < 350) {
+            setZoomDomain(null);
+            lastTapRef.current = 0;
+          } else {
+            lastTapRef.current = now;
+          }
+        }
+      }
+    }
+  };
 
   return (
     <div onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
@@ -170,19 +339,26 @@ export default function SessionDetailMobile({ session, sessions, onBack, onSessi
         )}
 
         {/* Chart */}
+        <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-3">
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />Thermal start</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />Thermal end</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />Launch peak</span>
+          {zoomDomain && <span className="text-gray-500 ml-auto">Pinch to zoom &middot; drag to pan &middot; double-tap to reset</span>}
+        </div>
         <div
-          className={`mt-3${timeRange > 1200 ? ' overflow-x-auto' : ''}`}
-          onTouchStart={timeRange > 1200 ? (e) => e.stopPropagation() : undefined}
-          onTouchEnd={timeRange > 1200 ? (e) => e.stopPropagation() : undefined}
+          className={`mt-1${!zoomDomain && fullTimeRange > 1200 ? ' overflow-x-auto' : ''}`}
+          onTouchStart={handleChartTouchStart}
+          onTouchMove={handleChartTouchMove}
+          onTouchEnd={handleChartTouchEnd}
         >
-          <div style={timeRange > 1200 ? { width: `${(timeRange / 1200) * 100}%` } : {}}>
-          <ResponsiveContainer width="100%" height={260}>
+          <div ref={chartInnerRef} style={!zoomDomain && fullTimeRange > 1200 ? { width: `${(fullTimeRange / 1200) * 100}%` } : {}}>
+          <ResponsiveContainer width="100%" height={260} style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
               <ComposedChart data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="timestamp"
                   type="number"
-                  domain={[minTime, maxTime]}
+                  domain={[displayMinTime, displayMaxTime]}
                   ticks={ticks}
                   tickFormatter={formatTimeAxis}
 
@@ -199,13 +375,15 @@ export default function SessionDetailMobile({ session, sessions, onBack, onSessi
                   stroke="#6b7280"
                   width={35}
                 />
-                <Tooltip
-                  content={<CustomTooltip unitLabel={unitLabel} />}
-                  isAnimationActive={false}
-                  cursor={{ stroke: '#666', strokeWidth: 1, strokeDasharray: '3 3' }}
-                  shared={false}
-                  trigger="axis"
-                />
+                {!isZoomTouchActive && (
+                  <Tooltip
+                    content={<CustomTooltip unitLabel={unitLabel} />}
+                    isAnimationActive={false}
+                    cursor={{ stroke: '#666', strokeWidth: 1, strokeDasharray: '3 3' }}
+                    shared={false}
+                    trigger="axis"
+                  />
+                )}
                 <Line
                   type="linear"
                   dataKey="altitude"

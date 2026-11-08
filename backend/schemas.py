@@ -66,6 +66,7 @@ class SessionDetail(SessionSummary):
 class UploadResponse(BaseModel):
     message: str
     session_ids: List[int]
+    new_records: List[dict] = []
 
 class DailySummary(BaseModel):
     date: datetime

@@ -1,9 +1,39 @@
 import { useState, useEffect } from 'react';
-import { Upload, CheckCircle, AlertCircle, MapPin, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Upload, CheckCircle, AlertCircle, MapPin, Plus, Trophy } from 'lucide-react';
 import { countries } from '../utils/countries';
 import { apiFetch } from '../utils/api';
+import { formatAltitudeValue, getUnitLabel } from '../utils/units';
+
+const formatRecordDuration = (seconds) => {
+  const totalSeconds = Math.round(seconds);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const secs = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+  return `${minutes}m ${secs}s`;
+};
+
+const formatRecordGain = (feet) => `${formatAltitudeValue(feet).toLocaleString()} ${getUnitLabel()}`;
+
+const formatRecordClimbRate = (feetPerSecond) => {
+  if (getUnitLabel() === 'm') return `${(feetPerSecond * 0.3048).toFixed(1)} m/s`;
+  return `${feetPerSecond.toFixed(1)} ft/s`;
+};
+
+const RECORD_META = {
+  flight_time: { label: 'Longest flight', format: formatRecordDuration },
+  session_thermal_gain: { label: 'Most thermal gain in a session', format: formatRecordGain },
+  session_thermal_duration: { label: 'Most thermal duration in a session', format: formatRecordDuration },
+  session_thermal_pct: { label: 'Highest thermal duration % in a session', format: (v) => `${v.toFixed(1)}%` },
+  thermal_duration: { label: 'Longest single thermal', format: formatRecordDuration },
+  thermal_gain: { label: 'Biggest single thermal', format: formatRecordGain },
+  avg_climb_rate: { label: 'Best average climb rate', format: formatRecordClimbRate },
+};
 
 export default function FileUpload({ onSuccess }) {
+  const navigate = useNavigate();
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState(null);
@@ -255,6 +285,35 @@ export default function FileUpload({ onSuccess }) {
                 View your sessions in the Sessions tab
               </p>
             </div>
+          </div>
+        )}
+
+        {result?.new_records?.length > 0 && (
+          <div className="mt-4 p-4 bg-amber-900/40 border border-amber-600 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <Trophy className="text-amber-400 flex-shrink-0" size={22} />
+              <p className="font-semibold text-amber-200">
+                {result.new_records.length === 1 ? 'New personal record!' : `${result.new_records.length} new personal records!`}
+              </p>
+            </div>
+            <ul className="space-y-1.5">
+              {result.new_records.map((r) => {
+                const meta = RECORD_META[r.type];
+                return (
+                  <li key={r.type} className="flex items-center justify-between gap-3 text-sm text-amber-100">
+                    <span>
+                      {meta?.label ?? r.type}: <span className="font-semibold">{meta ? meta.format(r.value) : r.value}</span>
+                    </span>
+                    <button
+                      onClick={() => navigate(`/sessions/${r.session_id}`)}
+                      className="text-amber-300 hover:text-amber-100 underline text-xs flex-shrink-0"
+                    >
+                      View
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           </div>
         )}
 

@@ -1,12 +1,25 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { MoveUp, ChevronUp, ChevronDown } from 'lucide-react';
+import { MoveUp, ChevronUp, ChevronDown, Trophy } from 'lucide-react';
 import { formatAltitudeValue, getUnitLabel, convertTemperature, getTempLabel, convertWindSpeed, getWindSpeedLabel } from '../utils/units';
 import { WeatherIcon } from '../utils/weatherIcon';
 import { apiFetch } from '../utils/api';
 
+// /api/daily-summary's date is a full ISO datetime ("2026-02-08T00:00:00");
+// /api/profile-stats' daily record dates are date-only ("2026-02-08"), since
+// one comes through the DailySummary schema's `date: datetime` field and the
+// other is a plain str() of a SQL date — compare by the YYYY-MM-DD prefix
+// rather than parsing both as Date objects, which risks timezone drift.
+const isRecordDay = (dayDateString, recordDate) =>
+  recordDate != null && dayDateString.slice(0, 10) === recordDate;
+
+const DailyRecordBadge = () => (
+  <Trophy size={12} className="text-amber-400 inline-block align-middle" title="All-time daily record" />
+);
+
 export default function DailySummary({ onDateClick }) {
   const [dailyData, setDailyData] = useState([]);
+  const [dailyRecords, setDailyRecords] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sortCol, setSortCol] = useState('date');
   const [sortDir, setSortDir] = useState('desc');
@@ -25,7 +38,13 @@ export default function DailySummary({ onDateClick }) {
     'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5,
   };
 
-  useEffect(() => { fetchDailySummary(); }, []);
+  useEffect(() => {
+    fetchDailySummary();
+    apiFetch('/api/profile-stats')
+      .then(res => res.json())
+      .then(setDailyRecords)
+      .catch(err => console.error('Error fetching daily records:', err));
+  }, []);
 
   const fetchDailySummary = async () => {
     try {
@@ -162,12 +181,24 @@ export default function DailySummary({ onDateClick }) {
                   onClick={() => onDateClick && onDateClick(fullDate)}
                 >
                   <td className="py-2 px-2 text-gray-300 whitespace-nowrap">{formatDate(day.date)}</td>
-                  <td className="py-2 px-2 text-gray-300 text-right whitespace-nowrap">{formatDuration(day.session_duration)}</td>
+                  <td className="py-2 px-2 text-gray-300 text-right whitespace-nowrap">
+                    {isRecordDay(day.date, dailyRecords?.max_daily_flight_time?.date) && <DailyRecordBadge />}
+                    {formatDuration(day.session_duration)}
+                  </td>
                   <td className="py-2 px-2 text-gray-300 text-right">{day.launch_count}</td>
                   <td className="py-2 px-2 text-gray-300 text-right">{day.thermal_count}</td>
-                  <td className="py-2 px-2 text-gray-300 text-right whitespace-nowrap">{Math.round(formatAltitudeValue(day.total_thermal_gain)).toLocaleString()}</td>
-                  <td className="hidden md:table-cell py-2 px-2 text-gray-300 text-right whitespace-nowrap">{formatDuration(day.total_thermal_duration)}</td>
-                  <td className="hidden md:table-cell py-2 px-2 text-gray-300 text-right">{thermalPercentage}%</td>
+                  <td className="py-2 px-2 text-gray-300 text-right whitespace-nowrap">
+                    {isRecordDay(day.date, dailyRecords?.max_daily_thermal_gain?.date) && <DailyRecordBadge />}
+                    {Math.round(formatAltitudeValue(day.total_thermal_gain)).toLocaleString()}
+                  </td>
+                  <td className="hidden md:table-cell py-2 px-2 text-gray-300 text-right whitespace-nowrap">
+                    {isRecordDay(day.date, dailyRecords?.max_daily_thermal_duration?.date) && <DailyRecordBadge />}
+                    {formatDuration(day.total_thermal_duration)}
+                  </td>
+                  <td className="hidden md:table-cell py-2 px-2 text-gray-300 text-right whitespace-nowrap">
+                    {isRecordDay(day.date, dailyRecords?.max_daily_thermal_pct?.date) && <DailyRecordBadge />}
+                    {thermalPercentage}%
+                  </td>
                   <td className="hidden md:table-cell py-2 px-1 text-center pl-4 w-6"><WeatherIcon condition={day.weather_conditions} /></td>
                   <td className="hidden md:table-cell py-2 px-1 text-gray-300 text-right whitespace-nowrap pl-3 w-12">
                     {day.weather_temperature_f != null ? `${convertTemperature(day.weather_temperature_f)}${tempLabel}` : '—'}
